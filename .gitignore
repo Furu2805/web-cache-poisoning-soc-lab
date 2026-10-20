@@ -1,0 +1,124 @@
+# Python and local tooling
+.venv/
+.venv-*/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.runtime/
+node_modules/
+.git/
+
+# Local credentials and environment overrides
+.env
+.env.*
+!.env.triage.example
+
+# Runtime data and generated results
+data/*
+!data/.gitkeep
+!data/events/
+data/events/*
+!data/events/.gitkeep
+!data/reports/
+data/reports/*
+!data/reports/.gitkeep
+results/
+MANIFEST_SHA256.json
+
+# Current runtime models are explicit exceptions; legacy models stay local
+models/*.joblib
+!models/isolation_forest.joblib
+!models/isolation_forest_detector_v2.joblib
+models/candidates/
+models/model_metadata.json
+
+# Only registry-referenced ML artifacts are kept
+ml-detector/data/
+ml-detector/artifacts/*
+!ml-detector/artifacts/candidates/
+ml-detector/artifacts/candidates/*
+!ml-detector/artifacts/candidates/query_phase2_v8/
+!ml-detector/artifacts/candidates/xfh_phase1_v3/
+!ml-detector/artifacts/candidates/utm_phase3/
+!ml-detector/artifacts/candidates/fatget_phase4_v2/
+ml-detector/artifacts/runtime_replay_v1/
+# Historical candidate evaluation output is local-only until it has a complete
+# reproducible run manifest (commit, host/resources, concurrency, sample counts).
+ml-detector/artifacts/candidates/*/evaluation.json
+ml-detector/artifacts/candidates/*/EVIDENCE.md
+ml-detector/artifacts/candidates/*/dataset_manifest.json
+ml-detector/artifacts/candidates/*/manifest.json
+ml-detector/artifacts/candidates/*/train_normal_variance_audit.json
+
+# Keep the public docs set curated; local coursework/archive stays out
+docs/*
+!docs/architecture.svg
+!docs/FULL_DEMO_GUIDE.md
+!docs/SOURCES.md
+!docs/EVALUATION.md
+!docs/SHADOW_RUNTIME.md
+!docs/grafana-dashboard.png
+docs/UPGRADE_CHECKLIST.md
+docs/OPERATOR_GUIDE.local.md
+
+# Keep only source needed by the vendored storefront build; its upstream Git
+# metadata is kept outside this checkout while the public snapshot is staged.
+vendor/fusion-electronics/.claude/
+vendor/fusion-electronics/.github/
+vendor/fusion-electronics/.husky/
+vendor/fusion-electronics/.idea/
+vendor/fusion-electronics/ARCHITECTURE.md
+vendor/fusion-electronics/DEPLOYMENT.md
+vendor/fusion-electronics/Dockerfile
+vendor/fusion-electronics/docker-compose.yml
+vendor/fusion-electronics/jest.config.js
+vendor/fusion-electronics/jest.setup.js
+vendor/fusion-electronics/.gitignore
+vendor/fusion-electronics/.npmrc
+vendor/fusion-electronics/.prettierrc
+vendor/fusion-electronics/deployment/
+vendor/fusion-electronics/docs/
+vendor/fusion-electronics/kubernetes/
+vendor/fusion-electronics/nomad/
+vendor/fusion-electronics/packer/
+vendor/fusion-electronics/terraform/
+vendor/fusion-electronics/vault/
+vendor/fusion-electronics/AGENTS.md
+vendor/fusion-electronics/CLAUDE.md
+vendor/fusion-electronics/Jenkinsfile
+vendor/fusion-electronics/Makefile
+vendor/fusion-electronics/README.md
+vendor/fusion-electronics/openapi.yaml
+vendor/fusion-electronics/publish.sh
+vendor/fusion-electronics/push_image.sh
+vendor/fusion-electronics/run-fusion-cron.sh
+vendor/fusion-electronics/backend/.gitignore
+vendor/fusion-electronics/backend/.npmrc
+vendor/fusion-electronics/backend/Dockerfile
+vendor/fusion-electronics/backend/faiss.sh
+vendor/fusion-electronics/backend/faiss_stores/
+vendor/fusion-electronics/backend/publish.sh
+vendor/fusion-electronics/backend/push.sh
+vendor/fusion-electronics/backend/scripts/
+vendor/fusion-electronics/backend/__tests__/
+vendor/fusion-electronics/src/tests/
+vendor/fusion-electronics/nginx/
+
+# Coursework figure generators are local working aids, not project runtime.
+scripts/add_chapter5_captions.ps1
+scripts/build_chapter5_demo_figures.ps1
+scripts/fix_chapter5_presentation.ps1
+scripts/build_chapter5_demo_charts.ps1
+scripts/generate_ch5_current_figures.py
+scripts/insert_ch5_result_figures.ps1
+
+# Office/temp artifacts and dependencies
+*.docx
+*.pptx
+~$*
+tmp_docx_demo/
+*.log
+node_modules/MANIFEST_SHA256.json

@@ -1,0 +1,13 @@
+{
+  "type": "train-normal primitive min/max",
+  "bounds": {
+    "semicolon_count": {
+      "min": 0.0,
+      "max": 0.0
+    },
+    "utm_semicolon_callback_count": {
+      "min": 0.0,
+      "max": 0.0
+    }
+  }
+}

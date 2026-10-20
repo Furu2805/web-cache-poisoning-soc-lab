@@ -1,0 +1,12 @@
+FROM node:18-alpine AS builder
+WORKDIR /app
+COPY vendor/fusion-electronics/package.json vendor/fusion-electronics/package-lock.json ./
+RUN npm ci
+COPY vendor/fusion-electronics/ .
+ARG REACT_APP_API_BASE_URL=/api
+ENV REACT_APP_API_BASE_URL=$REACT_APP_API_BASE_URL
+RUN npm run build
+
+FROM nginx:1.28-alpine
+COPY --from=builder /app/build /usr/share/nginx/html
+EXPOSE 80

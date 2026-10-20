@@ -1,0 +1,37 @@
+{
+  "schema_version": "route-detection-golden-v1",
+  "vectors": {
+    "query": {
+      "request": {"method": "GET", "uri": "/labs/query/?cb=golden123&page=2&view=grid&utm_content=summer-sale", "headers": {"Host": "fusion.local:8086", "User-Agent": "Golden/1", "Accept-Language": "vi"}},
+      "feature_sha256": "2a137d851bcc183331234eec5cb83a519e2759daf5507b78978ffe696d5131f6",
+      "component_scores": {"structural": 0.6718914845315986, "relationship": 0.6430404303158349},
+      "if_anomaly": true,
+      "profile_anomaly": false,
+      "final_anomaly": true
+    },
+    "xfh": {
+      "request": {"method": "GET", "uri": "/labs/xfh/shop?cb=golden123&category=electronics", "headers": {"Host": "fusion.local:8086", "X-Forwarded-Host": "edge.invalid", "User-Agent": "Golden/1"}},
+      "feature_sha256": "c8b64b2f6fa41f5b1ffa389200ea6054e96a9bd35b6eb185ebcb12ac2372a535",
+      "component_scores": {"relationship": 0.6825147706074235},
+      "if_anomaly": true,
+      "profile_anomaly": true,
+      "final_anomaly": true
+    },
+    "utm": {
+      "request": {"method": "GET", "uri": "/labs/utm/js/geolocate.js?callback=fusionReady&locale=vi&utm_content=campaign;callback=alert(1)", "headers": {"Host": "fusion.local:8086", "User-Agent": "Golden/1"}},
+      "feature_sha256": "09efd785fd3ebdd13790158d9d89c03cc2745f0c1c524d6988ef9e9fb8e54654",
+      "component_scores": {"structural": 0.5766931683531159, "relationship": 0.6657446009570996},
+      "if_anomaly": true,
+      "profile_anomaly": true,
+      "final_anomaly": true
+    },
+    "fatget": {
+      "request": {"method": "GET", "uri": "/labs/fatget/js/geolocate.js?callback=fusionReady&locale=vi", "headers": {"Host": "fusion.local:8086", "User-Agent": "Golden/1", "Content-Type": "application/x-www-form-urlencoded", "Content-Length": "24"}},
+      "feature_sha256": "b4b14c6244f510491d3ba74fe2eeede323a7c24bd28c8dc8bc8226b93b92b721",
+      "component_scores": {"relationship": 0.7074629777838793},
+      "if_anomaly": true,
+      "profile_anomaly": true,
+      "final_anomaly": true
+    }
+  }
+}

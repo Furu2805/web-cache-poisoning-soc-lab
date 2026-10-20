@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CacheShield Lab | Web Cache Poisoning</title>
+  <link rel="stylesheet" href="/assets/styles.css">
+  <link rel="stylesheet" href="/assets/phase1.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/"><span class="brand-mark">C</span><span>Cache<span>Shield</span></span></a>
+    <div class="topbar-meta"><span class="dot"></span><span id="mode-chip">Đang tải chế độ...</span><span class="sep"></span><span>Web Cache Security Lab</span><span class="sep"></span><a href="/login">Đăng nhập demo</a></div>
+  </header>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="side-caption">LAB WORKSPACE</div>
+      <button class="nav-item lab-nav active" data-panel="lab" data-scenario="xfh"><span class="nav-icon">01</span>Unkeyed Header</button>
+      <button class="nav-item lab-nav" data-panel="lab" data-scenario="query"><span class="nav-icon">02</span>Unkeyed Query String</button>
+      <button class="nav-item lab-nav" data-panel="lab" data-scenario="cloaking"><span class="nav-icon">03</span>Unkeyed UTM Parameters</button>
+      <button class="nav-item lab-nav" data-panel="lab" data-scenario="fatget"><span class="nav-icon">04</span>HTTP Response Splitting</button>
+      <div class="side-caption lower">MÔI TRƯỜNG</div>
+      <div class="env-card"><span class="pulse"></span><div><b>Nginx Reverse Proxy</b><small>Cache trạng thái thực</small></div></div>
+      <div class="env-card"><span class="pulse green"></span><div><b>ML Detection Service</b><small id="detector-status">Đang kiểm tra...</small></div></div>
+      <div class="env-card"><span class="pulse green"></span><div><b>Victim bot</b><small id="victim-bot-status">Đang kiểm tra...</small></div></div>
+      <p class="side-note">Lab cục bộ dành cho mục đích học tập. Backend không được công bố trực tiếp ra máy host; mọi request demo đều đi qua Nginx.</p>
+    </aside>
+
+    <main class="main">
+      <section id="website" class="panel website-panel">
+        <div class="crumb">GIAI ĐOẠN 1 / WEBSITE CACHEABLE / CLIENT <span id="client-label">A</span></div>
+        <div class="store-top">
+          <div>
+            <span class="eyebrow">CACHEMART TECHNOLOGY</span>
+            <h1>Website thử nghiệm qua <span>Nginx Cache</span></h1>
+            <p>Bốn trang lấy dữ liệu thật từ Backend Lab. Theo dõi MISS, HIT và BYPASS ngay trên giao diện.</p>
+          </div>
+          <div class="client-switch" aria-label="Chọn client mô phỏng">
+            <span>PHIÊN CLIENT</span>
+            <button class="client-btn active" data-client="A">Client A</button>
+            <button class="client-btn" data-client="B">Client B</button>
+          </div>
+        </div>
+
+        <nav class="store-nav" aria-label="Trang website thử nghiệm">
+          <button class="store-tab active" data-page="home">Home</button>
+          <button class="store-tab" data-page="product">Product</button>
+          <button class="store-tab" data-page="search">Search</button>
+          <button class="store-tab" data-page="news">News</button>
+        </nav>
+
+        <div class="store-layout">
+          <section class="store-content">
+            <div class="store-loading" id="store-loading">Đang lấy dữ liệu từ Backend...</div>
+            <div id="store-view"></div>
+          </section>
+          <aside class="cache-inspector">
+            <div class="inspector-title"><span class="eyebrow">CACHE INSPECTOR</span><strong>Response hiện tại</strong></div>
+            <dl>
+              <div><dt>Endpoint</dt><dd id="site-endpoint">—</dd></div>
+              <div><dt>Cache status</dt><dd><span class="status-pill" id="site-cache">—</span></dd></div>
+              <div><dt>Request ID</dt><dd id="site-request-id">—</dd></div>
+              <div><dt>Cache key profile</dt><dd id="site-key-profile">—</dd></div>
+              <div><dt>Origin data ID</dt><dd id="site-origin-id">—</dd></div>
+            </dl>
+            <label class="bypass-control"><input type="checkbox" id="site-bypass"> Gửi <code>X-Lab-Bypass: 1</code></label>
+            <button class="btn primary full" id="reload-site">Tải lại dữ liệu</button>
+            <button class="btn outline full" id="new-site-key">Tạo cache key mới</button>
+            <p class="inspector-note">Bấm tải lại hai lần để thấy MISS → HIT. Bật bypass để quan sát BYPASS.</p>
+          </aside>
+        </div>
+
+        <section class="phase-status">
+          <article><span>01</span><div><b>Frontend</b><small>Home / Product / Search / News</small></div></article>
+          <article><span>02</span><div><b>Reverse Proxy</b><small>Mọi API đi qua Nginx</small></div></article>
+          <article><span>03</span><div><b>Shared Cache</b><small>MISS / HIT / BYPASS + TTL</small></div></article>
+          <article><span>04</span><div><b>Logging</b><small>JSON + request ID + headers</small></div></article>
+        </section>
+      </section>
+
+      <section id="lab" class="panel active">
+        <section class="lab-intro" id="lab-intro" aria-live="polite"></section>
+
+        <div class="lab-runner hidden" id="lab-runner">
+        <div class="work-grid">
+          <section class="request-card">
+            <div class="card-head"><div><span class="eyebrow">ATTACKER REQUEST</span><h2>Request đáng ngờ</h2></div><span class="method">GET</span></div>
+            <div class="request-preview"><div class="request-line"><b id="request-method">GET</b><code id="request-path">/lab/xfh?id=...</code><span>HTTP/1.1</span></div><div class="headers" id="attacker-headers"></div><div class="request-body" id="request-body"></div></div>
+            <div class="controls"><label><span>Marker</span><input id="marker" value="DEMO_POISON" maxlength="40" autocomplete="off"></label><button class="btn primary" id="attack-btn"><span>▶</span> Gửi request attacker</button></div>
+          </section>
+          <section class="request-card victim-card">
+            <div class="card-head"><div><span class="eyebrow">VICTIM REQUEST</span><h2>Client bình thường</h2></div><span class="clean-label">Không có payload</span></div>
+            <div class="request-preview muted"><div class="request-line"><b>GET</b><code id="victim-path">/lab/xfh?id=...</code><span>HTTP/1.1</span></div><div class="headers"><span><em>Host:</em> lab.test</span><span><em>Accept:</em> application/json</span><span><em>Accept-Language:</em> vi</span></div></div>
+            <div class="victim-empty" id="victim-empty"><span class="victim-icon">◌</span><p>Gửi request attacker trước, sau đó kiểm tra cache bằng client độc lập.</p></div>
+            <button class="btn secondary" id="victim-btn" disabled><span>⌁</span> Kiểm tra response client</button>
+          </section>
+        </div>
+
+        <section class="results-section">
+          <div class="section-heading"><div><span class="eyebrow">EVIDENCE</span><h2>Kết quả thực nghiệm</h2></div><button class="clear-btn" id="clear-btn">Xóa phiên làm việc</button></div>
+          <div class="metrics-grid">
+            <article class="metric"><span>Cache attacker</span><strong id="attacker-cache">—</strong><small id="attacker-decision">Chưa có request</small></article>
+            <article class="metric"><span>Anomaly score</span><strong id="anomaly-score">—</strong><small id="score-note">Chưa có model result</small></article>
+            <article class="metric"><span>Cache client</span><strong id="victim-cache">—</strong><small id="victim-note">Chưa kiểm tra</small></article>
+            <article class="metric verdict"><span>Kết luận</span><strong id="verdict">ĐANG CHỜ</strong><small id="verdict-note">Chưa có bằng chứng</small></article>
+          </div>
+          <div class="evidence-grid"><article class="response-card"><div class="response-head"><span>RESPONSE ATTACKER</span><span id="attacker-status">—</span></div><pre id="attacker-response">Chưa có response.</pre></article><article class="response-card"><div class="response-head"><span>RESPONSE CLIENT</span><span id="victim-status">—</span></div><pre id="victim-response">Chưa có response.</pre></article></div>
+        </section>
+        </div>
+      </section>
+
+    </main>
+  </div>
+  <div class="toast" id="toast"></div>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

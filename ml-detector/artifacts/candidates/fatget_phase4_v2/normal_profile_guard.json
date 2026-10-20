@@ -1,0 +1,5 @@
+{
+  "type": "explicit primitive",
+  "feature": "has_body_on_get",
+  "normal_value": 0.0
+}

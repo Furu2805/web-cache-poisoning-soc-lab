@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cache-shield.local/schemas/wcp-request-record-v1.schema.json",
+  "title": "WCP request record v1",
+  "description": "A privacy-preserving request-time feature record with post-response evidence kept separate.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "record_id", "collection", "route", "annotation", "request_features", "evidence", "feature_policy"],
+  "properties": {
+    "schema_version": {"const": "wcp-request-record-v1"},
+    "record_id": {"type": "string", "minLength": 1},
+    "collected_at_epoch": {"type": "number"},
+    "collection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["collection_id", "group_id", "source"],
+      "properties": {
+        "collection_id": {"type": "string", "minLength": 1},
+        "group_id": {"type": "string", "minLength": 1},
+        "source": {"const": "synthetic-local-fusion-lab"}
+      }
+    },
+    "route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "scenario", "variant"],
+      "properties": {
+        "id": {"enum": ["xfh", "query", "utm", "fatget"]},
+        "scenario": {"enum": ["xfh", "query", "utm", "fatget"]},
+        "variant": {"const": "vulnerable"}
+      }
+    },
+    "annotation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["split", "label", "attack_type", "payload_variant"],
+      "properties": {
+        "split": {"enum": ["train", "validation", "test"]},
+        "label": {"enum": ["normal", "attack"]},
+        "attack_type": {"type": "string", "minLength": 1},
+        "payload_variant": {"type": "string", "minLength": 1}
+      }
+    },
+    "request_features": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["feature_schema_version", "method", "uri_path", "structural", "lexical_hash"],
+      "properties": {
+        "feature_schema_version": {"const": "selected-http-v4-route-lexical"},
+        "method": {"type": "string", "minLength": 1},
+        "uri_path": {"type": "string", "pattern": "^/"},
+        "structural": {
+          "type": "object",
+          "additionalProperties": {"type": "number"},
+          "minProperties": 25
+        },
+        "lexical_hash": {
+          "type": "object",
+          "additionalProperties": {"type": "number"},
+          "minProperties": 96
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request_id", "http_status", "cache", "response", "effect"],
+      "properties": {
+        "request_id": {"type": "string", "minLength": 1},
+        "http_status": {"type": "integer", "minimum": 100, "maximum": 599},
+        "cache": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "key_hash", "unkeyed_input"],
+          "properties": {
+            "status": {"type": "string"},
+            "key_hash": {"type": "string"},
+            "unkeyed_input": {"type": ["string", "null"]}
+          }
+        },
+        "response": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["content_type", "content_length", "size_delta"],
+          "properties": {
+            "content_type": {"type": "string"},
+            "content_length": {"type": "integer", "minimum": 0},
+            "size_delta": {"type": ["number", "null"]}
+          }
+        },
+        "effect": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["expected", "observed", "verified"],
+          "properties": {
+            "expected": {"type": "boolean"},
+            "observed": {"type": "boolean"},
+            "verified": {"type": "boolean"}
+          }
+        }
+      }
+    },
+    "feature_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request_time_only", "evidence_excluded_from_ml", "raw_payload_stored", "raw_cookie_stored"],
+      "properties": {
+        "request_time_only": {"const": true},
+        "evidence_excluded_from_ml": {"const": true},
+        "raw_payload_stored": {"const": false},
+        "raw_cookie_stored": {"const": false}
+      }
+    }
+  }
+}

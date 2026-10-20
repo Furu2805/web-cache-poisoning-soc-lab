@@ -1,0 +1,599 @@
+{
+  "uid": "fusion-ml-shadow",
+  "title": "Fusion Route-aware ML Shadow Monitoring",
+  "tags": [
+    "fusion",
+    "route-aware-ml",
+    "shadow-only"
+  ],
+  "timezone": "utc",
+  "schemaVersion": 41,
+  "version": 6,
+  "refresh": "10s",
+  "editable": false,
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "ml_verdict",
+        "label": "ML events",
+        "type": "custom",
+        "query": "Anomaly : true,Normal : false",
+        "current": {
+          "text": "Anomaly",
+          "value": "true"
+        },
+        "options": [
+          {
+            "text": "Anomaly",
+            "value": "true",
+            "selected": true
+          },
+          {
+            "text": "Normal",
+            "value": "false",
+            "selected": false
+          }
+        ],
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "skipUrlSync": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Candidate coverage by route",
+      "description": "Completed ML shadow events divided by Detection API inspections; candidates remain shadow-only. Click a point and choose View source events to open the logs in the same route and lookback interval. Percentiles summarize multiple source events.",
+      "datasource": {
+        "type": "loki",
+        "uid": "fusion-loki"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * sum by (route) (count_over_time({job=\"fusion-ml-shadow\",event_type=\"shadow_completed\"} [$__interval])) / sum by (route) (count_over_time({job=\"fusion-detector\",event_type=\"inspection\",route=~\"query|xfh|utm|fatget\"} [$__interval]))",
+          "legendFormat": "{{route}}",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 99
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "A"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "View ${ml_verdict:text} completed ML events for ${__field.labels.route}",
+                    "url": "/explore?schemaVersion=1&panes=%7B%22logs%22%3A%7B%22datasource%22%3A%22fusion-loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bjob%3D%5C%22fusion-ml-shadow%5C%22%2Cevent_type%3D%5C%22shadow_completed%5C%22%2Croute%3D%5C%22${__field.labels.route}%5C%22%7D%20%7C%20json%20%7C%20final_anomaly%3D%5C%22${ml_verdict:raw}%5C%22%20%7C%20label_format%20point_age_ms%3D%60%7B%7B%20sub%20${__value.time}%20%28unixEpochMillis%20%28__timestamp__%29%29%20%7D%7D%60%20%7C%20point_age_ms%20%3E%3D%200%20%7C%20point_age_ms%20%3C%20${__interval_ms}%22%2C%22queryType%22%3A%22range%22%2C%22editorMode%22%3A%22code%22%2C%22direction%22%3A%22backward%22%2C%22datasource%22%3A%7B%22type%22%3A%22loki%22%2C%22uid%22%3A%22fusion-loki%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22${__from}%22%2C%22to%22%3A%22${__value.time}%22%7D%2C%22compact%22%3Afalse%7D%7D&orgId=1",
+                    "targetBlank": true
+                  },
+                  {
+                    "title": "View detector inspections for ${__field.labels.route}",
+                    "url": "/explore?schemaVersion=1&panes=%7B%22logs%22%3A%7B%22datasource%22%3A%22fusion-loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bjob%3D%5C%22fusion-detector%5C%22%2Cevent_type%3D%5C%22inspection%5C%22%2Croute%3D%5C%22${__field.labels.route}%5C%22%7D%20%7C%20json%20%7C%20label_format%20point_age_ms%3D%60%7B%7B%20sub%20${__value.time}%20%28unixEpochMillis%20%28__timestamp__%29%29%20%7D%7D%60%20%7C%20point_age_ms%20%3E%3D%200%20%7C%20point_age_ms%20%3C%20${__interval_ms}%22%2C%22queryType%22%3A%22range%22%2C%22editorMode%22%3A%22code%22%2C%22direction%22%3A%22backward%22%2C%22datasource%22%3A%7B%22type%22%3A%22loki%22%2C%22uid%22%3A%22fusion-loki%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22${__from}%22%2C%22to%22%3A%22${__value.time}%22%7D%2C%22compact%22%3Afalse%7D%7D&orgId=1",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "IF / profile / final anomaly rate by route",
+      "description": "Candidate assessment only; these values never control cache behavior. Click a point and choose View anomaly logs to open Explore for that route and decision over the same lookback interval ending at the selected point. ML events selector filters drilldown logs by the selected IF/Profile/Final verdict; plotted rates are unchanged.",
+      "datasource": {
+        "type": "loki",
+        "uid": "fusion-loki"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * sum by (route) (count_over_time({job=\"fusion-ml-shadow\",event_type=\"shadow_completed\"} | json | if_anomaly=\"true\" [$__interval])) / sum by (route) (count_over_time({job=\"fusion-ml-shadow\",event_type=\"shadow_completed\"} [$__interval]))",
+          "legendFormat": "IF {{route}}",
+          "queryType": "range"
+        },
+        {
+          "refId": "B",
+          "expr": "100 * sum by (route) (count_over_time({job=\"fusion-ml-shadow\",event_type=\"shadow_completed\"} | json | profile_anomaly=\"true\" [$__interval])) / sum by (route) (count_over_time({job=\"fusion-ml-shadow\",event_type=\"shadow_completed\"} [$__interval]))",
+          "legendFormat": "Profile {{route}}",
+          "queryType": "range"
+        },
+        {
+          "refId": "C",
+          "expr": "100 * sum by (route) (count_over_time({job=\"fusion-ml-shadow\",event_type=\"shadow_completed\"} | json | final_anomaly=\"true\" [$__interval])) / sum by (route) (count_over_time({job=\"fusion-ml-shadow\",event_type=\"shadow_completed\"} [$__interval]))",
+          "legendFormat": "Final {{route}}",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "decimals": 1
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "A"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "View IF ${ml_verdict:text} logs for ${__field.labels.route}",
+                    "url": "/explore?schemaVersion=1&panes=%7B%22logs%22%3A%7B%22datasource%22%3A%22fusion-loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bjob%3D%5C%22fusion-ml-shadow%5C%22%2Cevent_type%3D%5C%22shadow_completed%5C%22%2Croute%3D%5C%22${__field.labels.route}%5C%22%7D%20%7C%20json%20%7C%20if_anomaly%3D%5C%22${ml_verdict:raw}%5C%22%20%7C%20label_format%20point_age_ms%3D%60%7B%7B%20sub%20${__value.time}%20%28unixEpochMillis%20%28__timestamp__%29%29%20%7D%7D%60%20%7C%20point_age_ms%20%3E%3D%200%20%7C%20point_age_ms%20%3C%20${__interval_ms}%22%2C%22queryType%22%3A%22range%22%2C%22editorMode%22%3A%22code%22%2C%22direction%22%3A%22backward%22%2C%22datasource%22%3A%7B%22type%22%3A%22loki%22%2C%22uid%22%3A%22fusion-loki%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22${__from}%22%2C%22to%22%3A%22${__value.time}%22%7D%2C%22compact%22%3Afalse%7D%7D&orgId=1",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "View Profile ${ml_verdict:text} logs for ${__field.labels.route}",
+                    "url": "/explore?schemaVersion=1&panes=%7B%22logs%22%3A%7B%22datasource%22%3A%22fusion-loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bjob%3D%5C%22fusion-ml-shadow%5C%22%2Cevent_type%3D%5C%22shadow_completed%5C%22%2Croute%3D%5C%22${__field.labels.route}%5C%22%7D%20%7C%20json%20%7C%20profile_anomaly%3D%5C%22${ml_verdict:raw}%5C%22%20%7C%20label_format%20point_age_ms%3D%60%7B%7B%20sub%20${__value.time}%20%28unixEpochMillis%20%28__timestamp__%29%29%20%7D%7D%60%20%7C%20point_age_ms%20%3E%3D%200%20%7C%20point_age_ms%20%3C%20${__interval_ms}%22%2C%22queryType%22%3A%22range%22%2C%22editorMode%22%3A%22code%22%2C%22direction%22%3A%22backward%22%2C%22datasource%22%3A%7B%22type%22%3A%22loki%22%2C%22uid%22%3A%22fusion-loki%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22${__from}%22%2C%22to%22%3A%22${__value.time}%22%7D%2C%22compact%22%3Afalse%7D%7D&orgId=1",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "C"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "View Final ${ml_verdict:text} logs for ${__field.labels.route}",
+                    "url": "/explore?schemaVersion=1&panes=%7B%22logs%22%3A%7B%22datasource%22%3A%22fusion-loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bjob%3D%5C%22fusion-ml-shadow%5C%22%2Cevent_type%3D%5C%22shadow_completed%5C%22%2Croute%3D%5C%22${__field.labels.route}%5C%22%7D%20%7C%20json%20%7C%20final_anomaly%3D%5C%22${ml_verdict:raw}%5C%22%20%7C%20label_format%20point_age_ms%3D%60%7B%7B%20sub%20${__value.time}%20%28unixEpochMillis%20%28__timestamp__%29%29%20%7D%7D%60%20%7C%20point_age_ms%20%3E%3D%200%20%7C%20point_age_ms%20%3C%20${__interval_ms}%22%2C%22queryType%22%3A%22range%22%2C%22editorMode%22%3A%22code%22%2C%22direction%22%3A%22backward%22%2C%22datasource%22%3A%7B%22type%22%3A%22loki%22%2C%22uid%22%3A%22fusion-loki%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22${__from}%22%2C%22to%22%3A%22${__value.time}%22%7D%2C%22compact%22%3Afalse%7D%7D&orgId=1",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Queue depth / queue lag / batch size",
+      "datasource": {
+        "type": "loki",
+        "uid": "fusion-loki"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max_over_time({job=\"fusion-ml-shadow\",event_type=\"shadow_accepted\"} | json | keep route, queue_depth | unwrap queue_depth | __error__=\"\" [$__interval])",
+          "legendFormat": "Queue depth {{route}}",
+          "queryType": "range"
+        },
+        {
+          "refId": "B",
+          "expr": "quantile_over_time(0.95, {job=\"fusion-ml-shadow\",event_type=\"shadow_completed\"} | json | keep route, queue_wait_ms | unwrap queue_wait_ms | __error__=\"\" [$__interval]) by (route)",
+          "legendFormat": "Queue lag P95 ms {{route}}",
+          "queryType": "range"
+        },
+        {
+          "refId": "C",
+          "expr": "max_over_time({job=\"fusion-ml-shadow\",event_type=\"shadow_completed\"} | json | keep route, batch_size | unwrap batch_size | __error__=\"\" [$__interval])",
+          "legendFormat": "Batch size {{route}}",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 2
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "A"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "View queue depth source event for ${__field.labels.route}",
+                    "url": "/explore?schemaVersion=1&panes=%7B%22logs%22%3A%7B%22datasource%22%3A%22fusion-loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bjob%3D%5C%22fusion-ml-shadow%5C%22%2Cevent_type%3D%5C%22shadow_accepted%5C%22%2Croute%3D%5C%22${__field.labels.route}%5C%22%7D%20%7C%20json%20%7C%20request_id%3D%5C%22${__field.labels.request_id}%5C%22%20%7C%20queue_depth%21%3D%5C%22%5C%22%20%7C%20label_format%20point_age_ms%3D%60%7B%7B%20sub%20${__value.time}%20%28unixEpochMillis%20%28__timestamp__%29%29%20%7D%7D%60%20%7C%20point_age_ms%20%3E%3D%200%20%7C%20point_age_ms%20%3C%20${__interval_ms}%22%2C%22queryType%22%3A%22range%22%2C%22editorMode%22%3A%22code%22%2C%22direction%22%3A%22backward%22%2C%22datasource%22%3A%7B%22type%22%3A%22loki%22%2C%22uid%22%3A%22fusion-loki%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22${__from}%22%2C%22to%22%3A%22${__value.time}%22%7D%2C%22compact%22%3Afalse%7D%7D&orgId=1",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "View ${ml_verdict:text} queue lag source event for ${__field.labels.route}",
+                    "url": "/explore?schemaVersion=1&panes=%7B%22logs%22%3A%7B%22datasource%22%3A%22fusion-loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bjob%3D%5C%22fusion-ml-shadow%5C%22%2Cevent_type%3D%5C%22shadow_completed%5C%22%2Croute%3D%5C%22${__field.labels.route}%5C%22%7D%20%7C%20json%20%7C%20final_anomaly%3D%5C%22${ml_verdict:raw}%5C%22%20%7C%20request_id%3D%5C%22${__field.labels.request_id}%5C%22%20%7C%20queue_wait_ms%21%3D%5C%22%5C%22%20%7C%20label_format%20point_age_ms%3D%60%7B%7B%20sub%20${__value.time}%20%28unixEpochMillis%20%28__timestamp__%29%29%20%7D%7D%60%20%7C%20point_age_ms%20%3E%3D%200%20%7C%20point_age_ms%20%3C%20${__interval_ms}%22%2C%22queryType%22%3A%22range%22%2C%22editorMode%22%3A%22code%22%2C%22direction%22%3A%22backward%22%2C%22datasource%22%3A%7B%22type%22%3A%22loki%22%2C%22uid%22%3A%22fusion-loki%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22${__from}%22%2C%22to%22%3A%22${__value.time}%22%7D%2C%22compact%22%3Afalse%7D%7D&orgId=1",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "C"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "View ${ml_verdict:text} batch size source event for ${__field.labels.route}",
+                    "url": "/explore?schemaVersion=1&panes=%7B%22logs%22%3A%7B%22datasource%22%3A%22fusion-loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bjob%3D%5C%22fusion-ml-shadow%5C%22%2Cevent_type%3D%5C%22shadow_completed%5C%22%2Croute%3D%5C%22${__field.labels.route}%5C%22%7D%20%7C%20json%20%7C%20final_anomaly%3D%5C%22${ml_verdict:raw}%5C%22%20%7C%20request_id%3D%5C%22${__field.labels.request_id}%5C%22%20%7C%20batch_size%21%3D%5C%22%5C%22%20%7C%20label_format%20point_age_ms%3D%60%7B%7B%20sub%20${__value.time}%20%28unixEpochMillis%20%28__timestamp__%29%29%20%7D%7D%60%20%7C%20point_age_ms%20%3E%3D%200%20%7C%20point_age_ms%20%3C%20${__interval_ms}%22%2C%22queryType%22%3A%22range%22%2C%22editorMode%22%3A%22code%22%2C%22direction%22%3A%22backward%22%2C%22datasource%22%3A%7B%22type%22%3A%22loki%22%2C%22uid%22%3A%22fusion-loki%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22${__from}%22%2C%22to%22%3A%22${__value.time}%22%7D%2C%22compact%22%3Afalse%7D%7D&orgId=1",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "description": " Click a point and choose View source events to open the logs in the same route and lookback interval. Percentiles summarize multiple source events. Queue links also preserve the request ID of the selected series."
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Inference latency P50 / P95 / P99",
+      "datasource": {
+        "type": "loki",
+        "uid": "fusion-loki"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "quantile_over_time(0.50, {job=\"fusion-ml-shadow\",event_type=\"shadow_completed\"} | json | unwrap inference_ms | __error__=\"\" [$__interval]) by (route)",
+          "legendFormat": "P50 {{route}}",
+          "queryType": "range"
+        },
+        {
+          "refId": "B",
+          "expr": "quantile_over_time(0.95, {job=\"fusion-ml-shadow\",event_type=\"shadow_completed\"} | json | unwrap inference_ms | __error__=\"\" [$__interval]) by (route)",
+          "legendFormat": "P95 {{route}}",
+          "queryType": "range"
+        },
+        {
+          "refId": "C",
+          "expr": "quantile_over_time(0.99, {job=\"fusion-ml-shadow\",event_type=\"shadow_completed\"} | json | unwrap inference_ms | __error__=\"\" [$__interval]) by (route)",
+          "legendFormat": "P99 {{route}}",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "decimals": 2,
+          "links": [
+            {
+              "title": "View ${ml_verdict:text} inference latency source events for ${__field.labels.route}",
+              "url": "/explore?schemaVersion=1&panes=%7B%22logs%22%3A%7B%22datasource%22%3A%22fusion-loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bjob%3D%5C%22fusion-ml-shadow%5C%22%2Cevent_type%3D%5C%22shadow_completed%5C%22%2Croute%3D%5C%22${__field.labels.route}%5C%22%7D%20%7C%20json%20%7C%20final_anomaly%3D%5C%22${ml_verdict:raw}%5C%22%20%7C%20inference_ms%21%3D%5C%22%5C%22%20%7C%20label_format%20point_age_ms%3D%60%7B%7B%20sub%20${__value.time}%20%28unixEpochMillis%20%28__timestamp__%29%29%20%7D%7D%60%20%7C%20point_age_ms%20%3E%3D%200%20%7C%20point_age_ms%20%3C%20${__interval_ms}%22%2C%22queryType%22%3A%22range%22%2C%22editorMode%22%3A%22code%22%2C%22direction%22%3A%22backward%22%2C%22datasource%22%3A%7B%22type%22%3A%22loki%22%2C%22uid%22%3A%22fusion-loki%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22${__from}%22%2C%22to%22%3A%22${__value.time}%22%7D%2C%22compact%22%3Afalse%7D%7D&orgId=1",
+              "targetBlank": true
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "description": " Click a point and choose View source events to open the logs in the same route and lookback interval. Percentiles summarize multiple source events."
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "End-to-end shadow latency P50 / P95 / P99",
+      "datasource": {
+        "type": "loki",
+        "uid": "fusion-loki"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 14
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "quantile_over_time(0.50, {job=\"fusion-ml-shadow\",event_type=\"shadow_completed\"} | json | unwrap shadow_latency_ms | __error__=\"\" [$__interval]) by (route)",
+          "legendFormat": "P50 {{route}}",
+          "queryType": "range"
+        },
+        {
+          "refId": "B",
+          "expr": "quantile_over_time(0.95, {job=\"fusion-ml-shadow\",event_type=\"shadow_completed\"} | json | unwrap shadow_latency_ms | __error__=\"\" [$__interval]) by (route)",
+          "legendFormat": "P95 {{route}}",
+          "queryType": "range"
+        },
+        {
+          "refId": "C",
+          "expr": "quantile_over_time(0.99, {job=\"fusion-ml-shadow\",event_type=\"shadow_completed\"} | json | unwrap shadow_latency_ms | __error__=\"\" [$__interval]) by (route)",
+          "legendFormat": "P99 {{route}}",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "decimals": 2,
+          "links": [
+            {
+              "title": "View ${ml_verdict:text} end-to-end latency source events for ${__field.labels.route}",
+              "url": "/explore?schemaVersion=1&panes=%7B%22logs%22%3A%7B%22datasource%22%3A%22fusion-loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bjob%3D%5C%22fusion-ml-shadow%5C%22%2Cevent_type%3D%5C%22shadow_completed%5C%22%2Croute%3D%5C%22${__field.labels.route}%5C%22%7D%20%7C%20json%20%7C%20final_anomaly%3D%5C%22${ml_verdict:raw}%5C%22%20%7C%20shadow_latency_ms%21%3D%5C%22%5C%22%20%7C%20label_format%20point_age_ms%3D%60%7B%7B%20sub%20${__value.time}%20%28unixEpochMillis%20%28__timestamp__%29%29%20%7D%7D%60%20%7C%20point_age_ms%20%3E%3D%200%20%7C%20point_age_ms%20%3C%20${__interval_ms}%22%2C%22queryType%22%3A%22range%22%2C%22editorMode%22%3A%22code%22%2C%22direction%22%3A%22backward%22%2C%22datasource%22%3A%7B%22type%22%3A%22loki%22%2C%22uid%22%3A%22fusion-loki%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22${__from}%22%2C%22to%22%3A%22${__value.time}%22%7D%2C%22compact%22%3Afalse%7D%7D&orgId=1",
+              "targetBlank": true
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "description": " Click a point and choose View source events to open the logs in the same route and lookback interval. Percentiles summarize multiple source events."
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Fallback / error / overflow rate",
+      "datasource": {
+        "type": "loki",
+        "uid": "fusion-loki"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * sum by (route, fallback_reason) (count_over_time({job=\"fusion-ml-shadow\",event_type=\"shadow_failed\"} [$__interval])) / sum by (route) (count_over_time({job=\"fusion-ml-shadow\",event_type=~\"shadow_accepted|shadow_failed\"} [$__interval]))",
+          "legendFormat": "{{route}} {{fallback_reason}}",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "decimals": 2
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Registry / schema / checksum failures",
+      "description": "Must remain zero. ML Shadow emits startup guard failures.",
+      "datasource": {
+        "type": "loki",
+        "uid": "fusion-loki"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 0,
+        "y": 21
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({job=\"fusion-ml-shadow\",event_type=\"shadow_failed\",fallback_reason=~\"registry_.*\"} [$__range]))",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 8,
+      "type": "stat",
+      "title": "Queue overflows",
+      "datasource": {
+        "type": "loki",
+        "uid": "fusion-loki"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 8,
+        "y": 21
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({job=\"fusion-ml-shadow\",event_type=\"shadow_failed\",fallback_reason=\"queue_overflow\"} [$__range]))",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 9,
+      "type": "stat",
+      "title": "Fat GET — MONITOR CLOSELY",
+      "description": "Fat GET v2 passed at the 2.0% FPR boundary; shadow-only and does not replace the profile guard.",
+      "datasource": {
+        "type": "loki",
+        "uid": "fusion-loki"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 16,
+        "y": 21
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({job=\"fusion-ml-shadow\",event_type=\"shadow_completed\",route=\"fatget\"} | json | monitor_closely=\"true\" [$__range]))",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "orange"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "Latest route-aware ML shadow decisions",
+      "description": "ML events selected by final verdict: Anomaly means final_anomaly=true; Normal means final_anomaly=false. Request IDs remain JSON fields, never Loki labels.",
+      "datasource": {
+        "type": "loki",
+        "uid": "fusion-loki"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 26
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{job=\"fusion-ml-shadow\",event_type=\"shadow_completed\"} | json | final_anomaly=\"${ml_verdict:raw}\"",
+          "queryType": "range",
+          "maxLines": 100
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    }
+  ]
+}

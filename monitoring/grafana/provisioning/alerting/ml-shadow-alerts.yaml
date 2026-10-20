@@ -1,0 +1,170 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: Fusion ML shadow alerts
+    folder: Fusion Security Lab
+    interval: 1m
+    rules:
+      - uid: fusion-ml-registry-failure
+        title: Fusion ML model or schema load failure
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: fusion-loki
+            model:
+              refId: A
+              queryType: range
+              expr: 'sum(count_over_time({job="fusion-ml-shadow",event_type="shadow_failed",fallback_reason=~"registry_.*"} [5m]))'
+          - refId: B
+            relativeTimeRange: {from: 0, to: 0}
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              conditions: []
+          - refId: C
+            relativeTimeRange: {from: 0, to: 0}
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+                  operator: {type: and}
+                  query: {params: [C]}
+                  reducer: {type: last, params: []}
+                  type: query
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        annotations:
+          summary: A route-aware model registry, checksum, or schema load failed.
+        labels: {severity: critical, component: ml-shadow}
+        isPaused: false
+
+      - uid: fusion-ml-anomaly-rate
+        title: Fusion ML shadow anomaly rate elevated
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: fusion-loki
+            model:
+              refId: A
+              queryType: range
+              expr: '(100 * sum(count_over_time({job="fusion-ml-shadow",event_type="shadow_completed"} | json | final_anomaly="true" [5m])) / sum(count_over_time({job="fusion-ml-shadow",event_type="shadow_completed"} [5m]))) and on() (sum(count_over_time({job="fusion-ml-shadow",event_type="shadow_completed"} [5m])) >= 20)'
+          - refId: B
+            relativeTimeRange: {from: 0, to: 0}
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              conditions: []
+          - refId: C
+            relativeTimeRange: {from: 0, to: 0}
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [20]}
+                  operator: {type: and}
+                  query: {params: [C]}
+                  reducer: {type: last, params: []}
+                  type: query
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: Shadow final-anomaly rate has exceeded 20% for five minutes with at least 20 completed samples.
+        labels: {severity: warning, component: ml-shadow}
+        isPaused: false
+
+      - uid: fusion-ml-queue-overflow
+        title: Fusion ML shadow queue overflow
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: fusion-loki
+            model: {refId: A, queryType: range, expr: 'sum(count_over_time({job="fusion-ml-shadow",event_type="shadow_failed",fallback_reason="queue_overflow"} [5m]))'}
+          - refId: B
+            relativeTimeRange: {from: 0, to: 0}
+            datasourceUid: __expr__
+            model: {refId: B, type: reduce, expression: A, reducer: last, conditions: []}
+          - refId: C
+            relativeTimeRange: {from: 0, to: 0}
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions: [{evaluator: {type: gt, params: [0]}, operator: {type: and}, query: {params: [C]}, reducer: {type: last, params: []}, type: query}]
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        annotations: {summary: The bounded ML shadow inference queue overflowed.}
+        labels: {severity: critical, component: ml-shadow}
+        isPaused: false
+
+      - uid: fusion-ml-coverage-low
+        title: Fusion ML shadow candidate coverage low
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: fusion-loki
+            model: {refId: A, queryType: range, expr: '100 * sum(count_over_time({job="fusion-ml-shadow",event_type="shadow_completed"} [10m])) / sum(count_over_time({job="fusion-detector",event_type="inspection",route=~"query|xfh|utm|fatget"} [10m]))'}
+          - refId: B
+            relativeTimeRange: {from: 0, to: 0}
+            datasourceUid: __expr__
+            model: {refId: B, type: reduce, expression: A, reducer: last, conditions: []}
+          - refId: C
+            relativeTimeRange: {from: 0, to: 0}
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions: [{evaluator: {type: lt, params: [99]}, operator: {type: and}, query: {params: [C]}, reducer: {type: last, params: []}, type: query}]
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        annotations: {summary: Route-aware candidate coverage stayed below 99 percent.}
+        labels: {severity: warning, component: ml-shadow}
+        isPaused: false
+
+      - uid: fusion-ml-queue-lag-high
+        title: Fusion ML shadow queue lag high
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: fusion-loki
+            model: {refId: A, queryType: range, expr: 'quantile_over_time(0.95, {job="fusion-ml-shadow",event_type="shadow_completed"} | json | unwrap queue_wait_ms | __error__="" [5m])'}
+          - refId: B
+            relativeTimeRange: {from: 0, to: 0}
+            datasourceUid: __expr__
+            model: {refId: B, type: reduce, expression: A, reducer: last, conditions: []}
+          - refId: C
+            relativeTimeRange: {from: 0, to: 0}
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions: [{evaluator: {type: gt, params: [1000]}, operator: {type: and}, query: {params: [C]}, reducer: {type: last, params: []}, type: query}]
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        annotations: {summary: ML shadow queue-wait P95 exceeded 1000 ms for five minutes.}
+        labels: {severity: warning, component: ml-shadow}
+        isPaused: false

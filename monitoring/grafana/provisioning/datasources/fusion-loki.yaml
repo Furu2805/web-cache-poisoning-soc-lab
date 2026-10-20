@@ -1,0 +1,14 @@
+apiVersion: 1
+
+# Version-controlled, read-only datasource for the local lab. The address is
+# Docker-internal; Loki itself is separately bound only to 127.0.0.1 on host.
+datasources:
+  - name: Fusion Loki
+    uid: fusion-loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    isDefault: true
+    editable: false
+    jsonData:
+      maxLines: 1000

@@ -1,0 +1,17 @@
+{
+  "type": "train-normal primitive min/max",
+  "bounds": {
+    "raw_angle_bracket_count": {
+      "min": 0.0,
+      "max": 0.0
+    },
+    "single_quote_count": {
+      "min": 0.0,
+      "max": 0.0
+    },
+    "semicolon_count": {
+      "min": 0.0,
+      "max": 0.0
+    }
+  }
+}

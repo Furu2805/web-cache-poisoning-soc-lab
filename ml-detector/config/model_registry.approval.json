@@ -1,0 +1,22 @@
+{
+    "schema_version":  "wcp-model-registry-approval-v1",
+    "registry_path":  "model_registry.json",
+    "registry_sha256":  "43caffb50476045a06a78fd594322b43011c6e913231ee1969fddf2aac1db3c7",
+    "decision":  "approved-shadow-only",
+    "approved_at":  "2026-09-27T00:00:00+07:00",
+    "approved_by":  "operator",
+    "routes":  [
+                   "query",
+                   "xfh",
+                   "utm",
+                   "fatget"
+               ],
+    "automatic_enforcement":  false,
+    "evidence":  [
+                     "docs/SHADOW_RUNTIME.md",
+                     "ml-detector/artifacts/candidates/query_phase2_v8/CHECKSUMS.sha256",
+                     "ml-detector/artifacts/candidates/xfh_phase1_v3/CHECKSUMS.sha256",
+                     "ml-detector/artifacts/candidates/utm_phase3/CHECKSUMS.sha256",
+                     "ml-detector/artifacts/candidates/fatget_phase4_v2/CHECKSUMS.sha256"
+                 ]
+}

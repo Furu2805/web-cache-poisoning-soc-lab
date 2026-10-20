@@ -1,0 +1,46 @@
+{
+  "schema_version": "wcp-route-registry-v1",
+  "description": "Canonical route/scenario registry for the local Fusion Web Cache Poisoning lab.",
+  "allowed_targets": [
+    "http://127.0.0.1:8086",
+    "http://localhost:8086"
+  ],
+  "routes": {
+    "xfh": {
+      "scenario": "xfh",
+      "ui_aliases": ["xfh"],
+      "vulnerable_target": "/labs/xfh/shop",
+      "fixed_target": "/labs/xfh/fixed/shop",
+      "attack_type": "xfh-unkeyed-header",
+      "unkeyed_input": "x-forwarded-host",
+      "normal_constraint": "X-Forwarded-Host is absent or equals Host"
+    },
+    "query": {
+      "scenario": "query",
+      "ui_aliases": ["query"],
+      "vulnerable_target": "/labs/query/",
+      "fixed_target": "/labs/query/fixed/",
+      "attack_type": "query-unkeyed-parameter",
+      "unkeyed_input": "utm_content",
+      "normal_constraint": "Benign query syntax; no executable reflection payload"
+    },
+    "utm": {
+      "scenario": "utm",
+      "ui_aliases": ["utm", "cloaking"],
+      "vulnerable_target": "/labs/utm/js/geolocate.js",
+      "fixed_target": "/labs/utm/fixed/js/geolocate.js",
+      "attack_type": "utm-parameter-cloaking",
+      "unkeyed_input": "utm_content:semicolon_callback",
+      "normal_constraint": "Benign callback and no semicolon-hidden callback override"
+    },
+    "fatget": {
+      "scenario": "fatget",
+      "ui_aliases": ["fatget"],
+      "vulnerable_target": "/labs/fatget/js/geolocate.js",
+      "fixed_target": "/labs/fatget/fixed/js/geolocate.js",
+      "attack_type": "fat-get-body",
+      "unkeyed_input": "get_request_body",
+      "normal_constraint": "GET request has no body"
+    }
+  }
+}

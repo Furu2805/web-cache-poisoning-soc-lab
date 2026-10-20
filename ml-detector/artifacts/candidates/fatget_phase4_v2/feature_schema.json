@@ -1,0 +1,9 @@
+{
+  "schema_version": "fatget-v2-runtime-features-v1",
+  "if_features": [
+    "fatget_body_presence_unseen_dithered"
+  ],
+  "profile_guard": [
+    "has_body_on_get"
+  ]
+}

@@ -1,0 +1,177 @@
+{
+  "uid": "fusion-cache-security",
+  "title": "Fusion Web Cache Security Monitoring",
+  "tags": ["fusion", "web-cache-poisoning", "security-lab"],
+  "timezone": "utc",
+  "schemaVersion": 41,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "editable": false,
+  "graphTooltip": 1,
+  "links": [],
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Total requests",
+      "description": "Number of JSON access-log events in the selected time range.",
+      "datasource": {"type": "loki", "uid": "fusion-loki"},
+      "gridPos": {"h": 4, "w": 4, "x": 0, "y": 0},
+      "targets": [{"refId": "A", "expr": "sum(count_over_time({job=\"fusion-nginx\"} [$__range]))", "queryType": "range"}],
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""}, "orientation": "auto", "textMode": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "auto"},
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0}, "overrides": []}
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Normal requests",
+      "description": "Detector events classified as normal. Requests made while detector mode is off are intentionally not counted.",
+      "datasource": {"type": "loki", "uid": "fusion-loki"},
+      "gridPos": {"h": 4, "w": 4, "x": 4, "y": 0},
+      "targets": [{"refId": "A", "expr": "sum(count_over_time({job=\"fusion-detector\"} | json | classification=\"normal\" [$__range]))", "queryType": "range"}],
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""}, "orientation": "auto", "textMode": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "auto"},
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "color": {"mode": "green"}}, "overrides": []}
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Anomaly requests",
+      "description": "Detector events classified as anomaly in observe or enforce mode.",
+      "datasource": {"type": "loki", "uid": "fusion-loki"},
+      "gridPos": {"h": 4, "w": 4, "x": 8, "y": 0},
+      "targets": [{"refId": "A", "expr": "sum(count_over_time({job=\"fusion-detector\"} | json | classification=\"anomaly\" [$__range]))", "queryType": "range"}],
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""}, "orientation": "auto", "textMode": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "auto"},
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "color": {"mode": "red"}}, "overrides": []}
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Cache HIT",
+      "datasource": {"type": "loki", "uid": "fusion-loki"},
+      "gridPos": {"h": 4, "w": 4, "x": 12, "y": 0},
+      "targets": [{"refId": "A", "expr": "sum(count_over_time({job=\"fusion-nginx\"} | json | cache_status=\"HIT\" [$__range]))", "queryType": "range"}],
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""}, "orientation": "auto", "textMode": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "auto"},
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "color": {"mode": "blue"}}, "overrides": []}
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Cache MISS",
+      "datasource": {"type": "loki", "uid": "fusion-loki"},
+      "gridPos": {"h": 4, "w": 4, "x": 16, "y": 0},
+      "targets": [{"refId": "A", "expr": "sum(count_over_time({job=\"fusion-nginx\"} | json | cache_status=\"MISS\" [$__range]))", "queryType": "range"}],
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""}, "orientation": "auto", "textMode": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "auto"},
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "color": {"mode": "yellow"}}, "overrides": []}
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Cache BYPASS",
+      "description": "Counts no-cache bypass responses produced when the detector is deliberately enabled in enforce mode.",
+      "datasource": {"type": "loki", "uid": "fusion-loki"},
+      "gridPos": {"h": 4, "w": 4, "x": 20, "y": 0},
+      "targets": [{"refId": "A", "expr": "sum(count_over_time({job=\"fusion-nginx\"} | json | cache_status=\"BYPASS\" [$__range]))", "queryType": "range"}],
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""}, "orientation": "auto", "textMode": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "auto"},
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "color": {"mode": "orange"}}, "overrides": []}
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Normal vs anomaly over time",
+      "datasource": {"type": "loki", "uid": "fusion-loki"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+      "targets": [
+        {"refId": "A", "expr": "sum(count_over_time({job=\"fusion-detector\"} | json | classification=\"normal\" [$__interval]))", "legendFormat": "Normal", "queryType": "range"},
+        {"refId": "B", "expr": "sum(count_over_time({job=\"fusion-detector\"} | json | classification=\"anomaly\" [$__interval]))", "legendFormat": "Anomaly", "queryType": "range"}
+      ],
+      "options": {"tooltip": {"mode": "multi", "sort": "desc"}, "legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}},
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0}, "overrides": []}
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Anomaly score over time",
+      "description": "The score is an Isolation Forest/profile anomaly score, not an attack probability.",
+      "datasource": {"type": "loki", "uid": "fusion-loki"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+      "targets": [{"refId": "A", "expr": "avg_over_time({job=\"fusion-detector\"} | json | unwrap anomaly_score | __error__=\"\" [$__interval])", "legendFormat": "Average score", "queryType": "range"}],
+      "options": {"tooltip": {"mode": "single", "sort": "none"}, "legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}},
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 3}, "overrides": []}
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Cache status over time",
+      "datasource": {"type": "loki", "uid": "fusion-loki"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+      "targets": [
+        {"refId": "A", "expr": "sum(count_over_time({job=\"fusion-nginx\"} | json | cache_status=\"HIT\" [$__interval]))", "legendFormat": "HIT", "queryType": "range"},
+        {"refId": "B", "expr": "sum(count_over_time({job=\"fusion-nginx\"} | json | cache_status=\"MISS\" [$__interval]))", "legendFormat": "MISS", "queryType": "range"},
+        {"refId": "C", "expr": "sum(count_over_time({job=\"fusion-nginx\"} | json | cache_status=\"BYPASS\" [$__interval]))", "legendFormat": "BYPASS", "queryType": "range"}
+      ],
+      "options": {"tooltip": {"mode": "multi", "sort": "desc"}, "legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}},
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0}, "overrides": []}
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Detection rate by scenario",
+      "description": "Anomaly events divided by all detector inspections for each lab scenario.",
+      "datasource": {"type": "loki", "uid": "fusion-loki"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+      "targets": [{"refId": "A", "expr": "100 * sum by (scenario) (count_over_time({job=\"fusion-detector\"} | json | classification=\"anomaly\" [$__interval])) / sum by (scenario) (count_over_time({job=\"fusion-detector\"} | json [$__interval]))", "legendFormat": "{{scenario}}", "queryType": "range"}],
+      "options": {"tooltip": {"mode": "multi", "sort": "desc"}, "legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}},
+      "fieldConfig": {"defaults": {"unit": "percent", "decimals": 1, "min": 0, "max": 100}, "overrides": []}
+    },
+    {
+      "id": 11,
+      "type": "bargauge",
+      "title": "Top suspicious URI",
+      "description": "URI paths ranked by detector anomaly-event count in the selected period.",
+      "datasource": {"type": "loki", "uid": "fusion-loki"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20},
+      "targets": [{"refId": "A", "expr": "topk(10, sum by (uri_path) (count_over_time({job=\"fusion-detector\"} | json | classification=\"anomaly\" [$__range])))", "legendFormat": "{{uri_path}}", "queryType": "range"}],
+      "options": {"orientation": "horizontal", "displayMode": "gradient", "valueMode": "color", "showUnfilled": true, "sizing": "auto", "minVizWidth": 0, "minVizHeight": 10},
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0}, "overrides": []}
+    },
+    {
+      "id": 12,
+      "type": "bargauge",
+      "title": "Header-related anomaly signals",
+      "description": "Privacy-safe view: counts normalized header-size signals, never raw header names or values.",
+      "datasource": {"type": "loki", "uid": "fusion-loki"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20},
+      "targets": [
+        {"refId": "A", "expr": "sum(count_over_time({job=\"fusion-detector\"} | json | classification=\"anomaly\" | indicators_normal_profile_deviations=~\".*selected_header_bytes.*\" [$__range]))", "legendFormat": "Selected header bytes", "queryType": "range"},
+        {"refId": "B", "expr": "sum(count_over_time({job=\"fusion-detector\"} | json | classification=\"anomaly\" | indicators_normal_profile_deviations=~\".*max_selected_value_bytes.*\" [$__range]))", "legendFormat": "Maximum selected value bytes", "queryType": "range"}
+      ],
+      "options": {"orientation": "horizontal", "displayMode": "gradient", "valueMode": "color", "showUnfilled": true, "sizing": "auto", "minVizWidth": 0, "minVizHeight": 10},
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0}, "overrides": []}
+    },
+    {
+      "id": 13,
+      "type": "table",
+      "title": "Latest inspected requests",
+      "description": "JSON access events with a detector decision. Raw cookie, payload and header values are absent by design.",
+      "datasource": {"type": "loki", "uid": "fusion-loki"},
+      "gridPos": {"h": 11, "w": 24, "x": 0, "y": 28},
+      "targets": [{"refId": "A", "expr": "{job=\"fusion-nginx\"} | json | detector_prediction=~\"normal|anomaly\"", "queryType": "range", "maxLines": 100}],
+      "transformations": [
+        {"id": "extractFields", "options": {"source": "Line", "format": "json", "replace": true, "keepTime": false}},
+        {"id": "organize", "options": {"excludeByName": {"schema": true, "scope": true, "mode": true, "host": true, "query_present": true, "status": true, "detector_action": true, "detector_recommendation": true, "detector_request_id": true, "detector_ms": true, "request_time": true, "upstream_time": true}, "indexByName": {"timestamp": 0, "request_id": 1, "client_ip": 2, "method": 3, "uri_path": 4, "anomaly_score": 5, "detector_prediction": 6, "cache_status": 7, "scenario": 8}, "renameByName": {"timestamp": "Timestamp (UTC)", "request_id": "Request ID", "client_ip": "Client IP", "method": "Method", "uri_path": "URI", "anomaly_score": "ML score", "detector_prediction": "Prediction", "cache_status": "Cache status", "scenario": "Scenario"}}}
+      ],
+      "options": {"showHeader": true, "cellHeight": "sm"},
+      "fieldConfig": {"defaults": {}, "overrides": []}
+    }
+  ]
+}

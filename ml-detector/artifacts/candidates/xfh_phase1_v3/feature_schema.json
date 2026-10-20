@@ -1,0 +1,9 @@
+{
+  "schema_version": "xfh-v3-runtime-features-v1",
+  "if_features": [
+    "xfh_relation_distance_dithered"
+  ],
+  "profile_guard": [
+    "host_mismatch"
+  ]
+}

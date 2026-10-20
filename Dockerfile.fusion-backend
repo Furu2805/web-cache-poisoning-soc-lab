@@ -1,0 +1,14 @@
+FROM node:18-alpine AS deps
+WORKDIR /app
+COPY vendor/fusion-electronics/package.json vendor/fusion-electronics/package-lock.json ./
+COPY vendor/fusion-electronics/backend/package.json backend/package.json
+RUN npm ci
+
+FROM node:18-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=deps /app/node_modules /app/node_modules
+COPY vendor/fusion-electronics/backend/ backend/
+WORKDIR /app/backend
+EXPOSE 8000
+CMD ["node", "index.js"]

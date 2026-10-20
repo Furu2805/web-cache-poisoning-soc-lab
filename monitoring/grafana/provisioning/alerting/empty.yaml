@@ -1,0 +1,3 @@
+# G11 does not provision alert rules, contact points, or notification policies.
+# This valid YAML placeholder keeps Grafana's optional alerting directory present.
+apiVersion: 1

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" role="img" aria-labelledby="title desc">
+  <title id="title">CacheMart product placeholder</title>
+  <desc id="desc">Abstract illustration used by the local Web Cache lab.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#172b35"/>
+      <stop offset="1" stop-color="#0e8394"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="360" rx="24" fill="url(#background)"/>
+  <circle cx="480" cy="98" r="110" fill="#ffffff" opacity=".05"/>
+  <rect x="78" y="70" width="180" height="220" rx="22" fill="#e95b27"/>
+  <rect x="102" y="96" width="132" height="132" rx="14" fill="#ffffff" opacity=".92"/>
+  <path d="M128 189l31-42 24 28 19-20 20 34z" fill="#0e8394"/>
+  <text x="303" y="160" fill="#ffffff" font-family="Arial, sans-serif" font-size="34" font-weight="700">CacheMart</text>
+  <text x="303" y="202" fill="#b8d8dc" font-family="Arial, sans-serif" font-size="18">Web Cache Security Lab</text>
+</svg>

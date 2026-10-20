@@ -1,0 +1,70 @@
+// Ship each sanitized JSONL stream under a dedicated low-cardinality job.
+// Low-cardinality source/job labels identify the stream. Request IDs, paths,
+// scores and scenario remain JSON fields and are queried with `| json`.
+local.file_match "fusion_events" {
+  path_targets = [
+    {
+      "__path__" = "/var/log/fusion/fusion-nginx-access.jsonl",
+      "job"      = "fusion-nginx",
+      "source"   = "nginx",
+    },
+    {
+      "__path__" = "/var/log/fusion/detector-events.jsonl",
+      "job"      = "fusion-detector",
+      "source"   = "detector",
+    },
+    {
+      "__path__" = "/var/log/fusion/ml-shadow-events.jsonl",
+      "job"      = "fusion-ml-shadow",
+      "source"   = "ml-shadow",
+    },
+    {
+      "__path__" = "/var/log/fusion/triage-events.jsonl",
+      "job"      = "fusion-triage",
+      "source"   = "triage",
+    },
+    {
+      "__path__" = "/var/log/fusion/incident-report-events.jsonl",
+      "job"      = "fusion-incident-report",
+      "source"   = "incident-report",
+    },
+  ]
+  sync_period = "5s"
+}
+
+loki.source.file "fusion_events" {
+  targets    = local.file_match.fusion_events.targets
+  forward_to = [loki.process.fusion_events.receiver]
+}
+
+// Parse only bounded, low-cardinality fields into labels. Request IDs, paths,
+// scores and latencies deliberately remain JSON fields to avoid label blow-up.
+loki.process "fusion_events" {
+  forward_to = [loki.write.local.receiver]
+
+  stage.json {
+    expressions = {
+      event_schema   = "schema",
+      event_type     = "event_type",
+      route          = "scenario",
+      model_version  = "model_version",
+      fallback_reason = "fallback_reason",
+    }
+  }
+
+  stage.labels {
+    values = {
+      event_schema    = "",
+      event_type      = "",
+      route           = "",
+      model_version   = "",
+      fallback_reason = "",
+    }
+  }
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

@@ -1,0 +1,227 @@
+services:
+  backend:
+    build: .
+    command: uvicorn backend.app:app --host 0.0.0.0 --port 8000
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 3s
+      timeout: 2s
+      retries: 30
+  detector:
+    build: .
+    # Four workers preserve request-path capacity. Candidate inference is
+    # isolated behind a bounded per-worker asynchronous microbatch queue.
+    command: uvicorn detector.app:app --host 0.0.0.0 --port 8001 --workers 4
+    environment:
+      ML_SHADOW_URL: http://ml-shadow:8003/internal/v1/shadow/events
+      ML_SHADOW_DELIVERY_QUEUE_SIZE: "128"
+      ML_SHADOW_DELIVERY_TIMEOUT_MS: "250"
+    depends_on:
+      ml-shadow: {condition: service_healthy}
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health')"]
+      interval: 3s
+      timeout: 2s
+      retries: 30
+  ml-shadow:
+    build: .
+    command: uvicorn ml_shadow.app:app --host 0.0.0.0 --port 8003 --workers 1
+    restart: unless-stopped
+    expose:
+      - "8003"
+    environment:
+      MODEL_REGISTRY_PATH: /app/ml-detector/config/model_registry.json
+      ML_SHADOW_QUEUE_SIZE: "512"
+      ML_SHADOW_BATCH_SIZE: "16"
+      ML_SHADOW_BATCH_WAIT_MS: "5"
+      ML_SHADOW_MAX_JOB_AGE_MS: "30000"
+      ML_SHADOW_RESULT_CACHE_SIZE: "2048"
+      ML_SHADOW_EVENT_LOG: /app/data/events/ml-shadow-events.jsonl
+      ML_SHADOW_EVENT_LOG_MAX_BYTES: "10485760"
+      ML_SHADOW_EVENT_LOG_BACKUPS: "5"
+    volumes:
+      - ./data/events:/app/data/events
+    mem_limit: 1536m
+    cpus: 2.0
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8003/health'); raise SystemExit(0 if __import__('json').load(r).get('registry_ready') else 1)"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
+  triage:
+    build: .
+    command: uvicorn triage.app:app --host 0.0.0.0 --port 8002
+    environment:
+      LOKI_URL: http://loki:3100
+      TRIAGE_EVENT_LOG: /var/log/fusion/triage-events.jsonl
+      INCIDENT_REPORT_DIR: /var/lib/fusion/reports
+      INCIDENT_EVENT_LOG: /var/log/fusion/incident-report-events.jsonl
+      TRIAGE_LOOKBACK_SECONDS: "604800"
+      # Optional post-event LLM narration. The key stays in the operator shell
+      # (or a locally ignored env file), never in source, logs, or dashboard.
+      TRIAGE_LLM_PROVIDER: ${TRIAGE_LLM_PROVIDER:-rules}
+      TRIAGE_LLM_REQUIRED: ${TRIAGE_LLM_REQUIRED:-false}
+      TRIAGE_LLM_TIMEOUT_SECONDS: ${TRIAGE_LLM_TIMEOUT_SECONDS:-30}
+      TRIAGE_ZAI_MODEL: ${TRIAGE_ZAI_MODEL:-glm-5.3-flash}
+      TRIAGE_ZAI_MAX_TOKENS: ${TRIAGE_ZAI_MAX_TOKENS:-2048}
+      TRIAGE_ZAI_REASONING_EFFORT: ${TRIAGE_ZAI_REASONING_EFFORT:-low}
+      ZAI_BASE_URL: ${ZAI_BASE_URL:-https://api.z.ai/api/paas/v4/chat/completions}
+      ZAI_API_KEY: ${ZAI_API_KEY:-}
+    depends_on:
+      loki: {condition: service_started}
+    ports:
+      - "127.0.0.1:8002:8002"
+    # The triage agent can access only sanitized event files, never raw traffic
+    # collection or model training datasets.
+    volumes:
+      - ./data/events:/var/log/fusion
+      - ./data/reports:/var/lib/fusion/reports
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/health')"]
+      interval: 3s
+      timeout: 2s
+      retries: 30
+  loki:
+    image: grafana/loki:3.7.0
+    command: -config.file=/etc/loki/config.yaml
+    ports:
+      - "127.0.0.1:13100:3100"
+    volumes:
+      - ./monitoring/loki/config.yaml:/etc/loki/config.yaml:ro
+      - loki_data:/loki
+  alloy:
+    image: grafana/alloy:v1.19.2
+    restart: unless-stopped
+    command: run --server.http.listen-addr=0.0.0.0:12345 --storage.path=/var/lib/alloy/data --disable-reporting /etc/alloy/config.alloy
+    depends_on:
+      loki: {condition: service_started}
+    ports:
+      - "127.0.0.1:12345:12345"
+    volumes:
+      - ./monitoring/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - ./data/events:/var/log/fusion:ro
+      - alloy_data:/var/lib/alloy/data
+  grafana:
+    image: grafana/grafana:12.4.0
+    depends_on:
+      loki: {condition: service_started}
+    environment:
+      # Local lab credentials only. Grafana is not exposed outside localhost.
+      GF_SECURITY_ADMIN_USER: fusion-admin
+      GF_SECURITY_ADMIN_PASSWORD: fusion-local-admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_SERVER_ROOT_URL: http://127.0.0.1:3000
+    ports:
+      - "127.0.0.1:13000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+  fusion-mongo:
+    image: mongo:6.0
+    volumes:
+      - fusion_mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+  fusion-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.fusion-backend
+    environment:
+      MONGO_URI: mongodb://fusion-mongo:27017/FusionElectronics
+      PORT: 8000
+      JWT_SECRET: local-lab-only-secret
+      PINECONE_PURGE_ON_SYNC: "false"
+      PINECONE_API_KEY: ""
+      GOOGLE_AI_API_KEY: ""
+    depends_on:
+      fusion-mongo: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:8000/api/products', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))\""]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+  fusion-storefront:
+    build:
+      context: .
+      dockerfile: Dockerfile.fusion-storefront
+      args:
+        REACT_APP_API_BASE_URL: /api
+    depends_on:
+      fusion-backend: {condition: service_healthy}
+  proxy:
+    image: nginx:1.28-alpine
+    depends_on:
+      backend: {condition: service_healthy}
+      detector: {condition: service_healthy}
+      fusion-backend: {condition: service_healthy}
+      fusion-storefront: {condition: service_started}
+    ports:
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8081:8081"
+      - "127.0.0.1:8082:8082"
+      - "127.0.0.1:8083:8083"
+      - "127.0.0.1:8084:8084"
+      - "127.0.0.1:8085:8085"
+      - "127.0.0.1:8086:8086"
+      # Stage 14 operator benchmark ports; the student-facing Fusion lab
+      # remains on 8086 with detector mode off.
+      - "127.0.0.1:8090:8090"
+      - "127.0.0.1:8091:8091"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx:/etc/nginx/lab:ro
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./data/events:/var/log/nginx
+  victim:
+    build: .
+    command: python -m victim
+    environment:
+      VICTIM_URL: http://proxy:8086/labs/xfh/shop
+      VICTIM_REPORT_URL: http://proxy:8080/auth/victim/report
+      VICTIM_HOST: 127.0.0.1:8086
+      VICTIM_NORMAL_TRACKING_HOST: 127.0.0.1
+      VICTIM_COOKIE_NAME: fusion_victim_id
+      VICTIM_SESSION_TOKEN: fusion-victim-local-7c9a4e2b
+      VICTIM_OBSERVE_PORT: "8090"
+      LOCAL_EXPLOIT_BROWSER_ORIGIN: http://127.0.0.1:8087
+      LOCAL_EXPLOIT_CONTAINER_ORIGIN: http://exploit:8087
+      VICTIM_JOB_URL: http://exploit:8087/api/victim/next
+      VICTIM_INTERVAL_SECONDS: "10"
+    depends_on:
+      proxy: {condition: service_started}
+      exploit: {condition: service_started}
+  exploit:
+    build: .
+    command: uvicorn exploit:app --host 0.0.0.0 --port 8087
+    volumes:
+      - ./data:/app/data
+    ports:
+      - "127.0.0.1:8087:8087"
+  runner:
+    build: .
+    profiles: ["tools"]
+    working_dir: /app
+    volumes:
+      - .:/app
+    environment:
+      LAB_HOST: proxy
+    command: python -m traffic.fusion_collect
+
+volumes:
+  fusion_mongo_data:
+  loki_data:
+  alloy_data:
+  grafana_data:

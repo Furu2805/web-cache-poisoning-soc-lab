@@ -1,0 +1,57 @@
+{
+  "schema_version": "wcp-model-registry-v1",
+  "routes": {
+    "query": {
+      "route_id": "query",
+      "candidate_id": "query-phase2-v8-full-sample-novelty",
+      "model_path": "ml-detector/artifacts/candidates/query_phase2_v8/model.joblib",
+      "threshold_path": "ml-detector/artifacts/candidates/query_phase2_v8/threshold.json",
+      "feature_schema_path": "ml-detector/artifacts/candidates/query_phase2_v8/feature_schema.json",
+      "feature_profile_path": "ml-detector/artifacts/candidates/query_phase2_v8/query_v8_feature_profile.json",
+      "profile_guard_path": "ml-detector/artifacts/candidates/query_phase2_v8/normal_profile_guard.json",
+      "checksum_manifest": "ml-detector/artifacts/candidates/query_phase2_v8/CHECKSUMS.sha256",
+      "mode": "shadow",
+      "primary": "if+profile",
+      "monitor_closely": false
+    },
+    "xfh": {
+      "route_id": "xfh",
+      "candidate_id": "xfh-phase1-v3-relation-distance",
+      "model_path": "ml-detector/artifacts/candidates/xfh_phase1_v3/model.joblib",
+      "threshold_path": "ml-detector/artifacts/candidates/xfh_phase1_v3/threshold.json",
+      "feature_schema_path": "ml-detector/artifacts/candidates/xfh_phase1_v3/feature_schema.json",
+      "feature_profile_path": "ml-detector/artifacts/candidates/xfh_phase1_v3/xfh_v3_feature_profile.json",
+      "profile_guard_path": "ml-detector/artifacts/candidates/xfh_phase1_v3/normal_profile_guard.json",
+      "checksum_manifest": "ml-detector/artifacts/candidates/xfh_phase1_v3/CHECKSUMS.sha256",
+      "mode": "shadow",
+      "primary": "profile",
+      "monitor_closely": false
+    },
+    "utm": {
+      "route_id": "utm",
+      "candidate_id": "utm-phase3-dual-if-novelty",
+      "model_path": "ml-detector/artifacts/candidates/utm_phase3/model.joblib",
+      "threshold_path": "ml-detector/artifacts/candidates/utm_phase3/threshold.json",
+      "feature_schema_path": "ml-detector/artifacts/candidates/utm_phase3/feature_schema.json",
+      "feature_profile_path": "ml-detector/artifacts/candidates/utm_phase3/utm_feature_profile.json",
+      "profile_guard_path": "ml-detector/artifacts/candidates/utm_phase3/normal_profile_guard.json",
+      "checksum_manifest": "ml-detector/artifacts/candidates/utm_phase3/CHECKSUMS.sha256",
+      "mode": "shadow",
+      "primary": "profile",
+      "monitor_closely": false
+    },
+    "fatget": {
+      "route_id": "fatget",
+      "candidate_id": "fatget-phase4-v2-body-relation",
+      "model_path": "ml-detector/artifacts/candidates/fatget_phase4_v2/model.joblib",
+      "threshold_path": "ml-detector/artifacts/candidates/fatget_phase4_v2/threshold.json",
+      "feature_schema_path": "ml-detector/artifacts/candidates/fatget_phase4_v2/feature_schema.json",
+      "feature_profile_path": "ml-detector/artifacts/candidates/fatget_phase4_v2/fatget_v2_feature_profile.json",
+      "profile_guard_path": "ml-detector/artifacts/candidates/fatget_phase4_v2/normal_profile_guard.json",
+      "checksum_manifest": "ml-detector/artifacts/candidates/fatget_phase4_v2/CHECKSUMS.sha256",
+      "mode": "shadow",
+      "primary": "profile",
+      "monitor_closely": true
+    }
+  }
+}
