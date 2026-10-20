@@ -12,11 +12,15 @@ import logging
 import os
 import re
 import threading
+import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Literal
 
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
+from pydantic import BaseModel, Field
 from fastapi.responses import JSONResponse
 
 from triage.incidents import (
@@ -24,8 +28,17 @@ from triage.incidents import (
     build_incident_report,
     incident_id_for,
     load_report,
-    store_report,
     write_report_event,
+)
+from triage.cases import (
+    calculate_metrics,
+    compact_case,
+    create_or_link_case,
+    list_cases as find_cases,
+    load_case,
+    save_case,
+    write_audit_event,
+    write_pipeline_event,
 )
 from triage.llm import LLMUnavailable, enrich, provider_config
 
@@ -34,11 +47,31 @@ LOKI_URL = os.getenv("LOKI_URL", "http://loki:3100").rstrip("/")
 EVENT_LOG = Path(os.getenv("TRIAGE_EVENT_LOG", "data/events/triage-events.jsonl"))
 REPORT_DIR = Path(os.getenv("INCIDENT_REPORT_DIR", "data/reports"))
 INCIDENT_EVENT_LOG = Path(os.getenv("INCIDENT_EVENT_LOG", "data/events/incident-report-events.jsonl"))
+CASE_AUDIT_LOG = Path(os.getenv("CASE_AUDIT_LOG", "data/events/case-audit-events.jsonl"))
+CASE_PIPELINE_LOG = Path(os.getenv("CASE_PIPELINE_LOG", "data/events/case-pipeline-events.jsonl"))
 LOOKBACK_SECONDS = max(60, min(int(os.getenv("TRIAGE_LOOKBACK_SECONDS", "604800")), 604800))
+CAMPAIGN_WINDOW_SECONDS = max(60, min(int(os.getenv("SOC_CAMPAIGN_WINDOW_SECONDS", "900")), 86400))
+AUTO_CASES_ENABLED = os.getenv("SOC_AUTO_CASES_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+AUTO_CASES_INTERVAL_SECONDS = max(2, min(int(os.getenv("SOC_AUTO_CASES_INTERVAL_SECONDS", "5")), 60))
+AUTO_CASES_LOOKBACK_SECONDS = max(60, min(int(os.getenv("SOC_AUTO_CASES_LOOKBACK_SECONDS", "600")), 3600))
 REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 INDICATOR_RE = re.compile(r"^[a-z0-9_:-]{1,64}$")
 EVENT_LOCK = threading.Lock()
 LOGGER = logging.getLogger(__name__)
+_AUTO_SEEN = set()
+_AUTO_INCOMPLETE = set()
+_AUTO_LOCK = threading.Lock()
+
+
+class CaseUpdate(BaseModel):
+    status: Literal["open", "investigating", "contained", "resolved", "false_positive"] | None = None
+    analyst_label: Literal["true_positive", "false_positive", "inconclusive"] | None = None
+    assignee: str | None = Field(default=None, max_length=80)
+    note: str | None = Field(default=None, max_length=1000)
+    mitigation_action: str | None = Field(default=None, max_length=240)
+    mitigation_decision: Literal["pending_review", "approved", "rejected"] | None = None
+    reviewer: str | None = Field(default=None, max_length=80)
+    actor: str | None = Field(default="local-analyst", max_length=80)
 
 
 TECHNIQUES = {
@@ -357,7 +390,104 @@ def write_triage_event(result):
         LOGGER.warning("triage event log unavailable: %s", type(exc).__name__)
 
 
-app = FastAPI(title="Fusion evidence triage service")
+def recent_detector_alerts():
+    """Fetch a bounded set of recent baseline anomalies from Loki."""
+    now = datetime.now(timezone.utc)
+    params = {
+        "query": '{job="fusion-detector"} | json | classification="anomaly"',
+        "limit": "200",
+        "start": str(int((now - timedelta(seconds=AUTO_CASES_LOOKBACK_SECONDS)).timestamp() * 1_000_000_000)),
+        "end": str(int(now.timestamp() * 1_000_000_000)),
+        "direction": "backward",
+    }
+    with httpx.Client(timeout=5.0) as client:
+        response = client.get(f"{LOKI_URL}/loki/api/v1/query_range", params=params)
+        response.raise_for_status()
+    return _parse_loki_events(response.json())
+
+
+def process_auto_alert(detector_event):
+    request_id = str(detector_event.get("request_id") or "")
+    supported_scenarios = {"xfh", "query", "utm", "fatget", "xfh-fixed", "query-fixed", "utm-fixed", "fatget-fixed"}
+    if (not REQUEST_ID_RE.fullmatch(request_id) or detector_event.get("classification") != "anomaly"
+            or detector_event.get("scenario") not in supported_scenarios):
+        return
+    with _AUTO_LOCK:
+        if request_id in _AUTO_DONE:
+            return
+        if request_id not in _AUTO_SEEN:
+            _AUTO_SEEN.add(request_id)
+            if len(_AUTO_SEEN) > 5000:
+                _AUTO_SEEN.clear()
+                _AUTO_SEEN.add(request_id)
+            write_pipeline_event(CASE_PIPELINE_LOG, event_type="alert-observed", request_id=request_id,
+                                 detected_at=detector_event.get("timestamp"))
+    try:
+        nginx_event, correlated_detector, shadow_event = correlated_event_bundle(request_id)
+    except HTTPException as exc:
+        if exc.status_code == 409:
+            with _AUTO_LOCK:
+                if request_id not in _AUTO_INCOMPLETE:
+                    _AUTO_INCOMPLETE.add(request_id)
+                    write_pipeline_event(CASE_PIPELINE_LOG, event_type="evidence-incomplete", request_id=request_id,
+                                         missing_sources=exc.detail.get("error", "incomplete"))
+            return
+        if exc.status_code == 404:
+            return
+        raise
+    with _AUTO_LOCK:
+        if request_id not in _AUTO_COMPLETE:
+            _AUTO_COMPLETE.add(request_id)
+            write_pipeline_event(CASE_PIPELINE_LOG, event_type="evidence-complete", request_id=request_id,
+                                 sources=["nginx", "baseline_detector", "ml_shadow"])
+    result = build_triage(request_id, nginx_event, correlated_detector, shadow_event)
+    write_triage_event(result)
+    incident_id = incident_id_for(request_id, correlated_detector.get("timestamp") or nginx_event.get("timestamp"))
+    report = build_incident_report(incident_id, nginx_event, correlated_detector, result)
+    case, created, outcome = create_or_link_case(
+        report, nginx_event, correlated_detector, shadow_event, result,
+        REPORT_DIR, CASE_AUDIT_LOG, CAMPAIGN_WINDOW_SECONDS,
+    )
+    if outcome != "already-linked":
+        event_type = "case-created" if created else "case-linked"
+        write_pipeline_event(CASE_PIPELINE_LOG, event_type=event_type, request_id=request_id,
+                             case_id=case["case"]["case_id"], duplicate=not created,
+                             fingerprint=case["case"].get("fingerprint"))
+        if created:
+            write_report_event(INCIDENT_EVENT_LOG, case)
+    with _AUTO_LOCK:
+        _AUTO_DONE.add(request_id)
+
+
+def auto_case_loop(stop_event):
+    while not stop_event.is_set():
+        try:
+            for event in recent_detector_alerts():
+                process_auto_alert(event)
+        except Exception as exc:
+            LOGGER.warning("automatic SOC case scan unavailable: %s", type(exc).__name__)
+        stop_event.wait(AUTO_CASES_INTERVAL_SECONDS)
+
+
+@asynccontextmanager
+async def lifespan(app):
+    stop_event = threading.Event()
+    worker = None
+    if AUTO_CASES_ENABLED:
+        worker = threading.Thread(target=auto_case_loop, args=(stop_event,), name="soc-case-correlator", daemon=True)
+        worker.start()
+    app.state.auto_case_worker = worker
+    app.state.auto_case_stop = stop_event
+    yield
+    stop_event.set()
+    if worker is not None:
+        worker.join(timeout=2)
+
+
+_AUTO_COMPLETE = set()
+_AUTO_DONE = set()
+
+app = FastAPI(title="Fusion evidence triage service", lifespan=lifespan)
 
 
 @app.get("/health")
@@ -374,6 +504,9 @@ def health():
         "zai_max_tokens": llm["zai_max_tokens"] if llm["provider"] == "zai-chat-completions" else None,
         "zai_reasoning_effort": llm["zai_reasoning_effort"] if llm["provider"] == "zai-chat-completions" else None,
         "loki_url_configured": bool(LOKI_URL),
+        "auto_cases_enabled": AUTO_CASES_ENABLED,
+        "auto_case_interval_seconds": AUTO_CASES_INTERVAL_SECONDS if AUTO_CASES_ENABLED else None,
+        "case_storage": "bind-mounted local JSON reports; single-node local-lab scope",
     }
 
 
@@ -454,14 +587,28 @@ def create_incident_report(request_id: str):
     result = enriched_triage(request_id, nginx_event, detector_event, shadow_event)
     report = build_incident_report(incident_id, nginx_event, detector_event, result)
     try:
-        created = store_report(REPORT_DIR, report)
-        if not created:
-            existing = load_report(REPORT_DIR, incident_id)
-            return JSONResponse(status_code=200, content={"created": False, "report": existing})
-        write_report_event(INCIDENT_EVENT_LOG, report)
+        qualified_alert = detector_event.get("classification") == "anomaly"
+        if qualified_alert:
+            write_pipeline_event(CASE_PIPELINE_LOG, event_type="alert-observed", request_id=request_id,
+                                 detected_at=detector_event.get("timestamp"))
+            write_pipeline_event(CASE_PIPELINE_LOG, event_type="evidence-complete", request_id=request_id,
+                                 sources=["nginx", "baseline_detector", "ml_shadow"])
+        case, created, outcome = create_or_link_case(
+            report, nginx_event, detector_event, shadow_event, result,
+            REPORT_DIR, CASE_AUDIT_LOG, CAMPAIGN_WINDOW_SECONDS,
+        )
+        if outcome == "already-linked":
+            return JSONResponse(status_code=200, content={"created": False, "report": case})
+        if qualified_alert:
+            write_pipeline_event(CASE_PIPELINE_LOG, event_type="case-created" if created else "case-linked",
+                                 request_id=request_id, case_id=case["case"]["case_id"],
+                                 duplicate=not created, fingerprint=case["case"].get("fingerprint"))
+        if created:
+            write_report_event(INCIDENT_EVENT_LOG, case)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         raise HTTPException(status_code=503, detail={"error": "incident-storage-unavailable", "reason": type(exc).__name__}) from exc
-    return {"created": True, "report": report}
+    return JSONResponse(status_code=201 if created else 200,
+                         content={"created": created, "linked": outcome == "linked-to-campaign", "report": case})
 
 
 @app.get("/incidents/{incident_id}")
@@ -502,3 +649,159 @@ def list_incident_reports(limit: int = 20):
         for report in reports
         if report is not None
     ]
+
+
+@app.get("/cases")
+def list_soc_cases(
+    severity: Literal["informational", "low", "medium", "high", "critical"] | None = None,
+    status: Literal["open", "investigating", "contained", "resolved", "false_positive"] | None = None,
+    route: str | None = Query(default=None, max_length=160),
+    q: str | None = Query(default=None, max_length=120),
+    since: str | None = Query(default=None, max_length=40),
+    until: str | None = Query(default=None, max_length=40),
+    limit: int = Query(default=100, ge=1, le=500),
+):
+    for value in (since, until):
+        if value:
+            try:
+                datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail={"error": "invalid-time-filter"}) from exc
+    reports = find_cases(REPORT_DIR, severity=severity, status=status, route=route, query=q,
+                         since=since, until=until, limit=limit)
+    return [compact_case(report) for report in reports]
+
+
+@app.get("/cases/{case_id}")
+def get_soc_case(case_id: str):
+    if not INCIDENT_ID_RE.fullmatch(case_id):
+        raise HTTPException(status_code=422, detail={"error": "invalid-case-id"})
+    try:
+        case = load_case(REPORT_DIR, case_id)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=503, detail={"error": "case-storage-unavailable"}) from exc
+    if case is None:
+        raise HTTPException(status_code=404, detail={"error": "case-not-found", "case_id": case_id})
+    return case
+
+
+@app.patch("/cases/{case_id}")
+def update_soc_case(case_id: str, update: CaseUpdate):
+    if not INCIDENT_ID_RE.fullmatch(case_id):
+        raise HTTPException(status_code=422, detail={"error": "invalid-case-id"})
+    try:
+        report = load_case(REPORT_DIR, case_id)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=503, detail={"error": "case-storage-unavailable"}) from exc
+    if report is None:
+        raise HTTPException(status_code=404, detail={"error": "case-not-found", "case_id": case_id})
+
+    fields = update.model_fields_set
+    actor = (update.actor or "local-analyst").strip()[:80] or "local-analyst"
+    case = report["case"]
+    if (update.status == "false_positive" and update.analyst_label not in {None, "false_positive"}):
+        raise HTTPException(status_code=422, detail={"error": "status-label-conflict"})
+    mitigation_entry = None
+    if update.mitigation_action is not None or update.mitigation_decision is not None:
+        action = (update.mitigation_action or "").strip()
+        allowed_actions = list(report.get("mitigation_suggestions", []))
+        recommended = report.get("system_action", {}).get("recommended_cache_action")
+        if recommended:
+            allowed_actions.append(recommended)
+        if action not in allowed_actions:
+            raise HTTPException(status_code=422, detail={"error": "mitigation-not-in-runbook"})
+        decision = update.mitigation_decision or "pending_review"
+        reviewer = (update.reviewer or "").strip()[:80] or None
+        if decision in {"approved", "rejected"} and not reviewer:
+            raise HTTPException(status_code=422, detail={"error": "reviewer-required"})
+        mitigation_entry = {"timestamp": datetime.now(timezone.utc).isoformat(), "action": action,
+                            "decision": decision, "reviewer": reviewer, "selected_by": actor}
+    changed = False
+    if "status" in fields and update.status is not None and update.status != case.get("status"):
+        previous = case.get("status")
+        case["status"] = update.status
+        write_audit_event(CASE_AUDIT_LOG, case_id=case_id, actor=actor, event_type="status-changed",
+                          details={"from": previous, "to": update.status})
+        changed = True
+        if update.status == "false_positive" and case.get("analyst_label") is None:
+            case["analyst_label"] = "false_positive"
+            write_audit_event(CASE_AUDIT_LOG, case_id=case_id, actor=actor, event_type="analyst-label-changed",
+                              details={"from": None, "to": "false_positive"})
+    if "analyst_label" in fields and update.analyst_label is not None and update.analyst_label != case.get("analyst_label"):
+        previous = case.get("analyst_label")
+        case["analyst_label"] = update.analyst_label
+        write_audit_event(CASE_AUDIT_LOG, case_id=case_id, actor=actor, event_type="analyst-label-changed",
+                          details={"from": previous, "to": update.analyst_label})
+        changed = True
+    if "assignee" in fields:
+        assignee = (update.assignee or "").strip()[:80] or None
+        previous = case.get("assignee")
+        if assignee != previous:
+            case["assignee"] = assignee
+            write_audit_event(CASE_AUDIT_LOG, case_id=case_id, actor=actor, event_type="assignee-changed",
+                              details={"from": previous, "to": assignee})
+            changed = True
+    if "note" in fields and update.note is not None:
+        note = " ".join(update.note.split()).strip()
+        if note:
+            note_entry = {"note_id": uuid.uuid4().hex[:12], "timestamp": datetime.now(timezone.utc).isoformat(),
+                          "author": actor, "text": note}
+            case.setdefault("notes", []).append(note_entry)
+            write_audit_event(CASE_AUDIT_LOG, case_id=case_id, actor=actor, event_type="note-added",
+                              details={"note_id": note_entry["note_id"]})
+            changed = True
+
+    if mitigation_entry:
+        case.setdefault("mitigation_decisions", []).append(mitigation_entry)
+        write_audit_event(CASE_AUDIT_LOG, case_id=case_id, actor=actor, event_type="mitigation-decision",
+                          details={"action": mitigation_entry["action"], "decision": mitigation_entry["decision"],
+                                   "reviewer": mitigation_entry["reviewer"]})
+        changed = True
+
+    if not changed:
+        raise HTTPException(status_code=422, detail={"error": "no-case-change"})
+    case["updated_at"] = datetime.now(timezone.utc).isoformat()
+    try:
+        save_case(REPORT_DIR, report)
+    except OSError as exc:
+        raise HTTPException(status_code=503, detail={"error": "case-storage-unavailable"}) from exc
+    return report
+
+
+@app.get("/cases/{case_id}/audit")
+def get_soc_case_audit(case_id: str):
+    if not INCIDENT_ID_RE.fullmatch(case_id):
+        raise HTTPException(status_code=422, detail={"error": "invalid-case-id"})
+    if load_case(REPORT_DIR, case_id) is None:
+        raise HTTPException(status_code=404, detail={"error": "case-not-found", "case_id": case_id})
+    try:
+        with CASE_AUDIT_LOG.open("r", encoding="utf-8") as stream:
+            events = [json.loads(line) for line in stream if line.strip()]
+    except FileNotFoundError:
+        events = []
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=503, detail={"error": "case-audit-unavailable"}) from exc
+    return [event for event in events if event.get("case_id") == case_id]
+
+
+@app.get("/metrics")
+def soc_metrics():
+    return calculate_metrics(REPORT_DIR, CASE_PIPELINE_LOG, CASE_AUDIT_LOG)
+
+
+@app.get("/runbook")
+def wcp_runbook():
+    return {
+        "title": "WCP analyst runbook",
+        "scope": "Local educational lab; evidence supports investigation, not proof of production compromise.",
+        "steps": [
+            "Validate the request ID across Nginx, baseline detector, ML shadow, and triage timeline.",
+            "Check route, cache status, detector mode, indicator codes, and whether a later client received a HIT.",
+            "Compare the affected route with its fixed route and repeat with a clean cache namespace.",
+            "Assign the case, record an evidence-based note, and mark false_positive only after documenting the control result.",
+            "Select a mitigation recommendation as pending_review, then record reviewer approval before any cache-affecting manual change.",
+            "Verify the change with a fresh request and independent client; record result and resolution time.",
+        ],
+        "approval_gate": "This service has no cache-configuration write endpoint. Any manual cache-affecting change must be reviewed by an analyst and verified separately.",
+        "lab_only": True,
+    }

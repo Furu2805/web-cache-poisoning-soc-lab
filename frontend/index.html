@@ -6,6 +6,8 @@
   <title>CacheShield Lab | Web Cache Poisoning</title>
   <link rel="stylesheet" href="/assets/styles.css">
   <link rel="stylesheet" href="/assets/phase1.css">
+  <link rel="stylesheet" href="/assets/soc.css">
+  <link rel="stylesheet" href="/assets/soc-overrides.css">
 </head>
 <body>
   <header class="topbar">
@@ -19,6 +21,8 @@
       <button class="nav-item lab-nav" data-panel="lab" data-scenario="query"><span class="nav-icon">02</span>Unkeyed Query String</button>
       <button class="nav-item lab-nav" data-panel="lab" data-scenario="cloaking"><span class="nav-icon">03</span>Unkeyed UTM Parameters</button>
       <button class="nav-item lab-nav" data-panel="lab" data-scenario="fatget"><span class="nav-icon">04</span>HTTP Response Splitting</button>
+      <div class="side-caption lower">OPERATIONS</div>
+      <button class="nav-item" data-panel="soc"><span class="nav-icon">SOC</span>Cases &amp; evidence</button>
       <div class="side-caption lower">MÔI TRƯỜNG</div>
       <div class="env-card"><span class="pulse"></span><div><b>Nginx Reverse Proxy</b><small>Cache trạng thái thực</small></div></div>
       <div class="env-card"><span class="pulse green"></span><div><b>ML Detection Service</b><small id="detector-status">Đang kiểm tra...</small></div></div>
@@ -109,9 +113,60 @@
         </div>
       </section>
 
+      <section id="soc" class="panel soc-panel">
+        <div class="soc-heading">
+          <div><span class="eyebrow">SECURITY OPERATIONS</span><h1>Case queue</h1><p>Correlated WCP alerts, evidence provenance, and analyst decisions.</p></div>
+          <button class="btn outline" id="soc-refresh">Refresh cases</button>
+        </div>
+        <div class="soc-scope">Local lab view. ML shadow is advisory. A mitigation approval is recorded for review; this service cannot change cache configuration.</div>
+        <div class="soc-metrics" id="soc-metrics" aria-live="polite">
+          <article><span>Alert → case</span><b id="metric-alert-case">—</b><small id="metric-alert-case-sample">No replay data</small></article>
+          <article><span>Campaign duplicates</span><b id="metric-duplicates">—</b><small id="metric-duplicates-sample">Grouped by fingerprint + route + 15m</small></article>
+          <article><span>False positives</span><b id="metric-fp">—</b><small id="metric-fp-sample">Requires positive/false-positive labels</small></article>
+          <article><span>Evidence complete</span><b id="metric-evidence">—</b><small id="metric-evidence-sample">Nginx + baseline + shadow</small></article>
+          <article><span>Mean MTTA</span><b id="metric-mtta">—</b><small id="metric-mtta-sample">Awaiting analyst acknowledgement</small></article>
+          <article><span>Mean MTTR</span><b id="metric-mttr">—</b><small id="metric-mttr-sample">Awaiting resolved cases</small></article>
+        </div>
+
+        <section class="soc-card soc-filters">
+          <div class="soc-filter-field"><label for="case-q">Search</label><input id="case-q" placeholder="Case ID, request ID, technique"></div>
+          <div class="soc-filter-field"><label for="case-severity">Severity</label><select id="case-severity"><option value="">All severities</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>informational</option></select></div>
+          <div class="soc-filter-field"><label for="case-status">Status</label><select id="case-status"><option value="">All statuses</option><option value="open">Open</option><option value="investigating">Investigating</option><option value="contained">Contained</option><option value="resolved">Resolved</option><option value="false_positive">False positive</option></select></div>
+          <div class="soc-filter-field"><label for="case-route">Route contains</label><input id="case-route" placeholder="/labs/xfh"></div>
+          <div class="soc-filter-field"><label for="case-since">From</label><input id="case-since" type="datetime-local"></div>
+          <div class="soc-filter-field"><label for="case-until">To</label><input id="case-until" type="datetime-local"></div>
+          <button class="btn primary" id="case-search">Apply filters</button>
+        </section>
+
+        <div class="soc-layout">
+          <section class="soc-card soc-queue">
+            <div class="soc-section-head"><div><span class="eyebrow">CASES</span><h2>Analyst queue</h2></div><span id="case-count" class="soc-count">0 cases</span></div>
+            <div class="soc-table-wrap"><table><thead><tr><th>Severity</th><th>Case / route</th><th>Status</th><th>Requests</th><th>Last seen</th><th>Assignee</th></tr></thead><tbody id="case-rows"><tr><td colspan="6" class="soc-empty">Loading cases…</td></tr></tbody></table></div>
+            <p id="case-error" class="soc-error" role="alert"></p>
+          </section>
+          <section id="case-detail" class="soc-card soc-detail hidden" aria-live="polite">
+            <div id="case-detail-content"><p class="soc-empty">Select a case to inspect its evidence timeline.</p></div>
+          </section>
+        </div>
+
+        <details class="soc-card soc-runbook">
+          <summary>WCP analyst runbook and mitigation approval gate</summary>
+          <ol>
+            <li>Correlate the request ID across Nginx, baseline detector, ML shadow, and triage timeline.</li>
+            <li>Review route, cache status, detector mode, indicator codes, and any later client HIT.</li>
+            <li>Compare with the fixed route and repeat using a clean cache namespace.</li>
+            <li>Record the evidence and assign the case. Mark false positive only after documenting the control result.</li>
+            <li>Select a mitigation as pending review. A reviewer name is required to approve or reject it.</li>
+            <li>Apply any cache-affecting change manually only after review, then verify with a fresh request and independent client.</li>
+          </ol>
+          <p>This API records the review decision only; it has no cache write or enforcement endpoint.</p>
+        </details>
+      </section>
+
     </main>
   </div>
   <div class="toast" id="toast"></div>
   <script src="/assets/app.js"></script>
+  <script src="/assets/soc.js"></script>
 </body>
 </html>

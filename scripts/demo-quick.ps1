@@ -20,6 +20,8 @@ function Wait-HttpReady {
 Wait-HttpReady 'http://127.0.0.1:13100/ready' 'Loki'
 Wait-HttpReady 'http://127.0.0.1:13000/api/health' 'Grafana'
 Wait-HttpReady 'http://127.0.0.1:8002/health' 'Triage'
+$triageHealth = Invoke-RestMethod -Uri 'http://127.0.0.1:8002/health'
+if (-not $triageHealth.auto_cases_enabled) { throw 'Automatic SOC cases are disabled. Start the Compose stack with the repository configuration.' }
 
 Write-Host '[2/4] Resetting cache and proving WCP with a harmless marker...'
 & .\reset-cache.ps1
@@ -41,20 +43,27 @@ $event = Invoke-WebRequest -UseBasicParsing `
 $requestId = $event.Headers['X-Request-ID']
 if (-not $requestId) { throw 'Observe response did not include X-Request-ID.' }
 
-Write-Host '[4/4] Waiting for correlated evidence and creating a redacted incident report...'
-$triage = $null
-for ($i = 0; $i -lt 12 -and $null -eq $triage; $i++) {
+Write-Host '[4/4] Waiting for the SOC correlator to create a case from complete evidence...'
+$case = $null
+for ($i = 0; $i -lt 30 -and $null -eq $case; $i++) {
     try {
-        $triage = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8002/triage/$requestId"
+        $caseCandidates = Invoke-RestMethod -Uri "http://127.0.0.1:8002/cases?q=$requestId&limit=200"
+        foreach ($match in $caseCandidates) {
+            $candidate = Invoke-RestMethod -Uri "http://127.0.0.1:8002/cases/$($match.case_id)"
+            $relatedIds = @($candidate.case.related_requests | ForEach-Object { $_.request_id })
+            if ($relatedIds -contains $requestId) {
+                $case = $candidate
+                break
+            }
+        }
     } catch {
         $status = 0
         if ($_.Exception.Response) { $status = [int]$_.Exception.Response.StatusCode }
         if ($status -notin @(404, 409)) { throw }
-        Start-Sleep -Seconds 2
     }
+    if ($null -eq $case) { Start-Sleep -Seconds 2 }
 }
-if ($null -eq $triage) { throw "Evidence did not arrive for request $requestId within 24 seconds." }
-$incident = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8002/incidents/$requestId"
+if ($null -eq $case) { throw "The automatic case did not appear for request $requestId within 60 seconds." }
 
 [pscustomobject]@{
     PoisonCache = $poisonCache
@@ -63,8 +72,10 @@ $incident = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8002/incidents
     RequestId = $requestId
     DetectorMode = $event.Headers['X-Fusion-Detector-Mode']
     Baseline = $event.Headers['X-Fusion-Detector-Decision']
-    TriageVerdict = $triage.verdict
-    Severity = $triage.severity
-    IncidentId = $incident.report.incident_id
+    CaseStatus = $case.case.status
+    Severity = $case.case.severity
+    CaseId = $case.case.case_id
+    EvidenceSources = (($case.timeline | ForEach-Object { $_.source } | Select-Object -Unique) -join ', ')
     Grafana = 'http://127.0.0.1:13000/d/fusion-cache-security'
+    SocCases = 'http://127.0.0.1:8080/ (select Cases & evidence)'
 }

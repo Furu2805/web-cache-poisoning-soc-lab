@@ -2,7 +2,9 @@
 
 A Dockerized research lab for reproducing web cache poisoning (WCP) and observing a route-aware detector in shadow mode. It combines an Nginx shared cache, a FastAPI baseline detector, isolated ML shadow scoring, Loki/Grafana, and evidence-based incident triage.
 
-> **Scope:** local educational lab. Candidate ML does not enforce cache actions. Synthetic traffic results do not establish production performance or detection quality.
+> **Scope:** local educational lab. The SOC API is unauthenticated and intended for loopback use only. Candidate ML does not enforce cache actions. Synthetic traffic results do not establish production performance or detection quality.
+
+> **Credential boundary:** Compose contains fixed demo credentials and secrets. Keep the stack on localhost; do not reuse those values or expose the unauthenticated SOC API. An external deployment needs managed secrets, TLS and authentication/RBAC, durable storage, retention, and tested backups.
 
 ![System architecture](docs/architecture.svg)
 
@@ -13,7 +15,8 @@ A Dockerized research lab for reproducing web cache poisoning (WCP) and observin
 - Four local WCP variants: unkeyed header, query, UTM parameter cloaking, and fat GET.
 - A safe cache proof: a harmless marker is cached on `MISS` and served to a clean request on `HIT`.
 - Route-aware candidate scoring with per-route schemas and artifacts, bounded asynchronous delivery, and checksum validation.
-- Request correlation through Nginx, detector, ML shadow, Loki/Grafana, and redacted post-event triage.
+- Automatic SOC cases from complete anomaly evidence, campaign grouping, analyst workflow, and a source-labelled timeline.
+- Request correlation through Nginx, baseline detector, ML shadow, Loki/Grafana, and redacted triage.
 
 ## Run locally
 
@@ -21,8 +24,8 @@ A Dockerized research lab for reproducing web cache poisoning (WCP) and observin
 
 ```powershell
 git lfs install
-git clone https://github.com/YOUR-ACCOUNT/web-cache-ai-lab.git
-cd web-cache-ai-lab
+git clone https://github.com/Furu2805/web-cache-poisoning-soc-lab.git
+cd web-cache-poisoning-soc-lab
 git lfs pull
 docker compose up --build -d --wait
 ```
@@ -37,7 +40,7 @@ After the stack starts, run:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\demo-quick.ps1
 ```
 
-It resets the cache, verifies the harmless `MISS -> HIT` marker flow, sends one XFH anomaly through observe mode, then creates a redacted triage report. Open Grafana at <http://127.0.0.1:13000/d/fusion-cache-security>. For the four-route walkthrough and optional failure-isolation demo, see the [full demo guide](docs/FULL_DEMO_GUIDE.md).
+It resets the cache, verifies the harmless `MISS -> HIT` marker flow, sends one XFH anomaly through observe mode, then waits for the SOC correlator to create a case from the complete evidence. Open the lab at <http://127.0.0.1:8080/> and select **Cases & evidence**, or open Grafana at <http://127.0.0.1:13000/d/fusion-cache-security>. For the four-route walkthrough and analyst runbook, see the [full demo guide](docs/FULL_DEMO_GUIDE.md).
 
 | Local address | Purpose |
 | --- | --- |
@@ -46,6 +49,7 @@ It resets the cache, verifies the harmless `MISS -> HIT` marker flow, sends one 
 | `http://127.0.0.1:13000/` | Grafana (`fusion-admin` / `fusion-local-admin`) |
 | `http://127.0.0.1:13100/ready` | Loki readiness |
 | `http://127.0.0.1:8002/health` | Triage health |
+| `http://127.0.0.1:8080/` | Local SOC case queue |
 
 ## Evaluation and limitations
 

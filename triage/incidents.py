@@ -17,7 +17,7 @@ from pathlib import Path
 REPORT_SCHEMA = "fusion-incident-report-v1"
 REPORT_EVENT_SCHEMA = "fusion-incident-report-event-v1"
 INCIDENT_ID_RE = re.compile(r"^INC-\d{8}T\d{6}Z-[a-f0-9]{12}$")
-REPORT_LOCK = threading.Lock()
+REPORT_LOCK = threading.RLock()
 
 
 # Chuẩn hóa thời điểm event về UTC.

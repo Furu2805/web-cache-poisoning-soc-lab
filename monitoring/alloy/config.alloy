@@ -28,6 +28,16 @@ local.file_match "fusion_events" {
       "job"      = "fusion-incident-report",
       "source"   = "incident-report",
     },
+    {
+      "__path__" = "/var/log/fusion/case-audit-events.jsonl",
+      "job"      = "fusion-case-audit",
+      "source"   = "case-audit",
+    },
+    {
+      "__path__" = "/var/log/fusion/case-pipeline-events.jsonl",
+      "job"      = "fusion-case-pipeline",
+      "source"   = "case-pipeline",
+    },
   ]
   sync_period = "5s"
 }

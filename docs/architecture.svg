@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1440" height="850" viewBox="0 0 1440 850" role="img" aria-labelledby="t d">
 <title id="t">Web Cache Poisoning Detection Lab Architecture</title>
-<desc id="d">Local clients send requests through Nginx shared cache to a storefront. Nginx inspects requests through a baseline detector, which asynchronously sends allowlisted metadata to a route-aware ML shadow service. Sanitized events flow through Alloy and Loki to Grafana and post-event triage. Triage writes redacted incident reports and cannot enforce cache actions.</desc>
+<desc id="d">Local clients send requests through Nginx shared cache to a storefront. Nginx inspects requests through a baseline detector, which asynchronously sends allowlisted metadata to a route-aware ML shadow service. Sanitized events flow through Alloy and Loki to Grafana and automatic evidence correlation. The SOC case queue groups matching alerts, tracks analyst status, notes, mitigation review, evidence timeline and audit trail, and cannot enforce cache actions.</desc>
 <defs>
  <marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#64748b"/></marker>
  <marker id="p" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#7c3aed"/></marker>
@@ -25,7 +25,7 @@
 <rect class="card" x="1100" y="375" width="270" height="115"/><text class="h" x="1130" y="415">Sanitized JSONL</text><text class="b" x="1130" y="445">request ID · scores · status</text><text class="s" x="1130" y="468">no raw payload or credentials</text>
 <path class="line" d="M535 280C480 315 420 325 380 355"/><path class="async" d="M545 430H635"/><text class="s" x="553" y="414">allowlisted metadata</text><path class="async" d="M1015 430H1095"/>
 
-<rect class="card" x="155" y="620" width="310" height="125"/><text class="h" x="185" y="660">Redacted incident report</text><text class="b" x="185" y="690">evidence · verdict · mitigation</text><text class="s" x="185" y="716">post-event artifact</text>
+<rect class="card" x="155" y="620" width="310" height="125"/><text class="h" x="185" y="660">SOC case store</text><text class="b" x="185" y="690">campaign · state · evidence timeline</text><text class="s" x="185" y="716">analyst notes · review · audit</text>
 <rect class="card teal" x="565" y="620" width="360" height="125"/><text class="h" x="595" y="660">Post-event triage</text><text class="b" x="595" y="690">joins evidence by request ID</text><text class="s" x="595" y="716">rules authoritative · optional LLM narration</text>
 <rect class="card teal" x="1025" y="620" width="345" height="125"/><text class="h" x="1055" y="660">Alloy → Loki → Grafana</text><text class="b" x="1055" y="690">event search · dashboards · alerts</text><rect class="pt" x="1055" y="708" width="134" height="21" rx="10"/><text class="pill tt" x="1068" y="723">OBSERVABILITY</text>
 <path class="async" d="M1235 495V610"/><path class="line" d="M1020 675H930"/><path class="line" d="M560 675H470"/>

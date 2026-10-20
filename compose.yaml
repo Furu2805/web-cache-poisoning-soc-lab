@@ -62,7 +62,13 @@ services:
       TRIAGE_EVENT_LOG: /var/log/fusion/triage-events.jsonl
       INCIDENT_REPORT_DIR: /var/lib/fusion/reports
       INCIDENT_EVENT_LOG: /var/log/fusion/incident-report-events.jsonl
+      CASE_AUDIT_LOG: /var/log/fusion/case-audit-events.jsonl
+      CASE_PIPELINE_LOG: /var/log/fusion/case-pipeline-events.jsonl
       TRIAGE_LOOKBACK_SECONDS: "604800"
+      SOC_AUTO_CASES_ENABLED: "true"
+      SOC_AUTO_CASES_INTERVAL_SECONDS: "5"
+      SOC_AUTO_CASES_LOOKBACK_SECONDS: "600"
+      SOC_CAMPAIGN_WINDOW_SECONDS: "900"
       # Optional post-event LLM narration. The key stays in the operator shell
       # (or a locally ignored env file), never in source, logs, or dashboard.
       TRIAGE_LLM_PROVIDER: ${TRIAGE_LLM_PROVIDER:-rules}
@@ -166,6 +172,7 @@ services:
     depends_on:
       backend: {condition: service_healthy}
       detector: {condition: service_healthy}
+      triage: {condition: service_healthy}
       fusion-backend: {condition: service_healthy}
       fusion-storefront: {condition: service_started}
     ports:
