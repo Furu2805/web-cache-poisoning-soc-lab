@@ -1,7 +1,7 @@
 {
     "schema_version":  "wcp-model-registry-approval-v1",
     "registry_path":  "model_registry.json",
-    "registry_sha256":  "43caffb50476045a06a78fd594322b43011c6e913231ee1969fddf2aac1db3c7",
+    "registry_sha256":  "dea347e1beadc059a7e35ff87d1ca2ba4fc60c951e360930bbe4338192e7428f",
     "decision":  "approved-shadow-only",
     "approved_at":  "2026-09-27T00:00:00+07:00",
     "approved_by":  "operator",
