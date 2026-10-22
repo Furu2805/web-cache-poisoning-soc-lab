@@ -12,7 +12,9 @@ import logging
 import os
 import re
 import threading
+import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -54,12 +56,17 @@ CAMPAIGN_WINDOW_SECONDS = max(60, min(int(os.getenv("SOC_CAMPAIGN_WINDOW_SECONDS
 AUTO_CASES_ENABLED = os.getenv("SOC_AUTO_CASES_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
 AUTO_CASES_INTERVAL_SECONDS = max(2, min(int(os.getenv("SOC_AUTO_CASES_INTERVAL_SECONDS", "5")), 60))
 AUTO_CASES_LOOKBACK_SECONDS = max(60, min(int(os.getenv("SOC_AUTO_CASES_LOOKBACK_SECONDS", "600")), 3600))
+AUTO_CASE_WORKERS = max(1, min(int(os.getenv("SOC_AUTO_CASE_WORKERS", "8")), 16))
+AUTO_CASE_BATCH_SIZE = max(1, min(int(os.getenv("SOC_AUTO_CASE_BATCH_SIZE", "25")), 100))
+AUTO_CASE_INCOMPLETE_RETRY_SECONDS = max(2, min(int(os.getenv("SOC_AUTO_CASE_INCOMPLETE_RETRY_SECONDS", "10")), 60))
+AUTO_SUPPORTED_SCENARIOS = {"xfh", "query", "utm", "fatget", "xfh-fixed", "query-fixed", "utm-fixed", "fatget-fixed"}
 REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 INDICATOR_RE = re.compile(r"^[a-z0-9_:-]{1,64}$")
 EVENT_LOCK = threading.Lock()
 LOGGER = logging.getLogger(__name__)
 _AUTO_SEEN = set()
 _AUTO_INCOMPLETE = set()
+_AUTO_RETRY_AFTER = {}
 _AUTO_LOCK = threading.Lock()
 
 
@@ -403,17 +410,19 @@ def recent_detector_alerts():
     with httpx.Client(timeout=5.0) as client:
         response = client.get(f"{LOKI_URL}/loki/api/v1/query_range", params=params)
         response.raise_for_status()
-    return _parse_loki_events(response.json())
+    # The general parser sorts events chronologically for evidence timelines.
+    # The worker queue should instead process fresh alerts before old backlog.
+    events = _parse_loki_events(response.json())
+    return sorted(events, key=lambda event: str(event.get("timestamp", "")), reverse=True)
 
 
 def process_auto_alert(detector_event):
     request_id = str(detector_event.get("request_id") or "")
-    supported_scenarios = {"xfh", "query", "utm", "fatget", "xfh-fixed", "query-fixed", "utm-fixed", "fatget-fixed"}
     if (not REQUEST_ID_RE.fullmatch(request_id) or detector_event.get("classification") != "anomaly"
-            or detector_event.get("scenario") not in supported_scenarios):
+            or detector_event.get("scenario") not in AUTO_SUPPORTED_SCENARIOS):
         return
     with _AUTO_LOCK:
-        if request_id in _AUTO_DONE:
+        if request_id in _AUTO_DONE or _AUTO_RETRY_AFTER.get(request_id, 0) > time.monotonic():
             return
         if request_id not in _AUTO_SEEN:
             _AUTO_SEEN.add(request_id)
@@ -425,14 +434,13 @@ def process_auto_alert(detector_event):
     try:
         nginx_event, correlated_detector, shadow_event = correlated_event_bundle(request_id)
     except HTTPException as exc:
-        if exc.status_code == 409:
+        if exc.status_code in {404, 409, 503}:
             with _AUTO_LOCK:
-                if request_id not in _AUTO_INCOMPLETE:
+                if exc.status_code == 409 and request_id not in _AUTO_INCOMPLETE:
                     _AUTO_INCOMPLETE.add(request_id)
                     write_pipeline_event(CASE_PIPELINE_LOG, event_type="evidence-incomplete", request_id=request_id,
                                          missing_sources=exc.detail.get("error", "incomplete"))
-            return
-        if exc.status_code == 404:
+                _AUTO_RETRY_AFTER[request_id] = time.monotonic() + AUTO_CASE_INCOMPLETE_RETRY_SECONDS
             return
         raise
     with _AUTO_LOCK:
@@ -457,13 +465,40 @@ def process_auto_alert(detector_event):
             write_report_event(INCIDENT_EVENT_LOG, case)
     with _AUTO_LOCK:
         _AUTO_DONE.add(request_id)
+        _AUTO_RETRY_AFTER.pop(request_id, None)
 
 
 def auto_case_loop(stop_event):
     while not stop_event.is_set():
         try:
-            for event in recent_detector_alerts():
-                process_auto_alert(event)
+            events = recent_detector_alerts()
+            now = time.monotonic()
+            with _AUTO_LOCK:
+                done = set(_AUTO_DONE)
+                retry_after = dict(_AUTO_RETRY_AFTER)
+            alerts = []
+            seen_ids = set()
+            for event in events:
+                request_id = str(event.get("request_id") or "")
+                if (request_id in seen_ids or request_id in done or retry_after.get(request_id, 0) > now
+                        or event.get("classification") != "anomaly"
+                        or event.get("scenario") not in AUTO_SUPPORTED_SCENARIOS):
+                    continue
+                seen_ids.add(request_id)
+                alerts.append(event)
+                if len(alerts) >= AUTO_CASE_BATCH_SIZE:
+                    break
+            if alerts:
+                # Correlating each alert requires three Loki lookups. Process a
+                # bounded newest-first batch in parallel, then rescan so alerts
+                # arriving during this batch are not stuck behind old backlog.
+                with ThreadPoolExecutor(max_workers=AUTO_CASE_WORKERS, thread_name_prefix="soc-case") as pool:
+                    futures = [pool.submit(process_auto_alert, event) for event in alerts]
+                    for future in as_completed(futures):
+                        try:
+                            future.result()
+                        except Exception as exc:
+                            LOGGER.warning("automatic SOC alert processing failed: %s", type(exc).__name__)
         except Exception as exc:
             LOGGER.warning("automatic SOC case scan unavailable: %s", type(exc).__name__)
         stop_event.wait(AUTO_CASES_INTERVAL_SECONDS)

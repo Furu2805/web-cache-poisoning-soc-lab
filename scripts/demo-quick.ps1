@@ -28,8 +28,10 @@ Write-Host '[2/4] Resetting cache and proving WCP with a harmless marker...'
 if ($LASTEXITCODE -ne 0) { throw 'Cache reset failed.' }
 $demo = [guid]::NewGuid().ToString('N').Substring(0, 12)
 $marker = "WCP_$demo"
-$poison = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:8086/labs/query/?utm_content=$marker"
-$victim = Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:8086/labs/query/'
+# utm_content is deliberately unkeyed; demo_run remains keyed and isolates this
+# proof from prior or background requests that may have warmed the shared route.
+$poison = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:8086/labs/query/?utm_content=$marker&demo_run=$demo"
+$victim = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:8086/labs/query/?demo_run=$demo"
 $poisonCache = $poison.Headers['X-Cache-Status']
 $victimCache = $victim.Headers['X-Cache-Status']
 if ($poisonCache -notin @('MISS', 'EXPIRED') -or $victimCache -ne 'HIT' -or -not $victim.Content.Contains($marker)) {
@@ -77,5 +79,5 @@ if ($null -eq $case) { throw "The automatic case did not appear for request $req
     CaseId = $case.case.case_id
     EvidenceSources = (($case.timeline | ForEach-Object { $_.source } | Select-Object -Unique) -join ', ')
     Grafana = 'http://127.0.0.1:13000/d/fusion-cache-security'
-    SocCases = 'http://127.0.0.1:8080/ (select Cases & evidence)'
+    SocCases = 'http://127.0.0.1:8080/soc/ (select Cases & evidence)'
 }

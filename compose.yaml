@@ -55,7 +55,9 @@ services:
       retries: 30
       start_period: 20s
   triage:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.triage
     command: uvicorn triage.app:app --host 0.0.0.0 --port 8002
     environment:
       LOKI_URL: http://loki:3100
@@ -68,6 +70,9 @@ services:
       SOC_AUTO_CASES_ENABLED: "true"
       SOC_AUTO_CASES_INTERVAL_SECONDS: "5"
       SOC_AUTO_CASES_LOOKBACK_SECONDS: "600"
+      SOC_AUTO_CASE_WORKERS: "4"
+      SOC_AUTO_CASE_BATCH_SIZE: "8"
+      SOC_AUTO_CASE_INCOMPLETE_RETRY_SECONDS: "10"
       SOC_CAMPAIGN_WINDOW_SECONDS: "900"
       # Optional post-event LLM narration. The key stays in the operator shell
       # (or a locally ignored env file), never in source, logs, or dashboard.

@@ -61,6 +61,9 @@ docs/*
 !docs/EVALUATION.md
 !docs/SHADOW_RUNTIME.md
 !docs/grafana-dashboard.png
+!docs/demo-assets/
+docs/demo-assets/*
+!docs/demo-assets/*.png
 docs/UPGRADE_CHECKLIST.md
 docs/OPERATOR_GUIDE.local.md
 
